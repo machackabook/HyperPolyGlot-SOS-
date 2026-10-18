@@ -1,0 +1,10 @@
+{
+  "name": "HyperTerminal Polyglot Quine OS",
+  "description": "100% visual renderer background with polymorphic neurality and interactive sovereign terminal interface, real-time AI voice responses, and dynamic sentiment-driven environment alteration.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
