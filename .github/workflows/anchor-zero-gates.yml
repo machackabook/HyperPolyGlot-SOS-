@@ -13,15 +13,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-          cache: 'npm'
+          bun-version: latest
       - name: Install locked dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
       - name: Typecheck
-        run: npm run lint
+        run: bun run lint
       - name: Build
-        run: npm run build
+        run: bun run build
       - name: Local parser tests
-        run: node --experimental-strip-types --test src/services/anchorZeroRouter.test.mjs
+        run: bun test src/services/anchorZeroRouter.test.mjs
