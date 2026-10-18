@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { EnvironmentState } from './types';
+import { AnchorZeroOverlay } from './components/AnchorZeroOverlay';
 
 export function App() {
   // Global Environment State governing the 100% Background Visual Renderer & Terminal
@@ -54,6 +55,7 @@ export function App() {
 
       {/* The Sole UI: Sovereign HyperTerminal */}
       <HyperTerminal envState={envState} setEnvState={setEnvState} />
+      <AnchorZeroOverlay setEnvState={setEnvState} />
     </div>
   );
 }
