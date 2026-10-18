@@ -16,7 +16,8 @@ export function AnchorZeroOverlay({setEnvState}:{setEnvState:React.Dispatch<Reac
    if(cmd.kind==='undo') {
      const old=undo.current.pop();if(!old){setMessage('Nothing to undo');return}
      stateRef.current=old;setState(old);setMessage('ErrUndo restored prior state');
-     setEnvState(e=>({...e,terminalOpacity:e.terminalOpacity}));
+     const colors: Record<Persona,string>={GAIA:'#34d399',NEXUS:'#00ffff',SARAFINSOLARIS:'#ffcc00',MUSE:'#a855f7',ADAM:'#e0e7ff'};
+     setEnvState(e=>({...e,primaryColor:colors[old.persona],audioReactiveLevel:old.opacity.canvas/100,bloomIntensity:old.intensity}));
      return;
    }
    const next:Snapshot={...prior,opacity:{...prior.opacity}};
