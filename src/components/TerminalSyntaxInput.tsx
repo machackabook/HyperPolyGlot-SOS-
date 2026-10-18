@@ -131,6 +131,8 @@ export const TerminalSyntaxInput: React.FC<TerminalSyntaxInputProps> = ({
                     ? 'bg-rose-950/90 text-rose-300 border-rose-500/50 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
                     : commandCategory === 'DEV EXEC'
                     ? 'bg-amber-950/90 text-amber-300 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
+                    : commandCategory === 'DEVICE CONTROL'
+                    ? 'bg-cyan-950/90 text-cyan-300 border-cyan-400/60 shadow-[0_0_10px_rgba(6,182,212,0.4)]'
                     : 'bg-slate-900/90 text-sky-300 border-sky-500/50'
                 }`}
               >
@@ -201,6 +203,10 @@ export const TerminalSyntaxInput: React.FC<TerminalSyntaxInputProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-sky-300"></span>
               <span className="text-sky-300 font-bold">System</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-cyan-300"></span>
+              <span className="text-cyan-300 font-bold">Device / A11y</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-300"></span>

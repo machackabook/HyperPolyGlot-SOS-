@@ -341,6 +341,110 @@ class AudioVoiceService {
   }
 
   // =========================================================================
+  // VOICE PROFILES & ACCESSIBILITY SUBSYSTEM
+  // =========================================================================
+
+  private currentProfileId = 'sovereign';
+  private announcerListeners: ((message: string, assertive: boolean) => void)[] = [];
+
+  public static readonly PROFILES: Record<string, { id: string; name: string; pitch: number; rate: number; carrierFreq: number; description: string; style: string }> = {
+    sovereign: {
+      id: 'sovereign',
+      name: 'Sovereign Core',
+      pitch: 0.95,
+      rate: 1.05,
+      carrierFreq: 432,
+      description: 'Balanced, authoritative neural voice with subtle harmonic undertones',
+      style: 'from-cyan-400 to-blue-500',
+    },
+    quantum: {
+      id: 'quantum',
+      name: 'Quantum Echo',
+      pitch: 1.3,
+      rate: 0.95,
+      carrierFreq: 528,
+      description: 'Ethereal, high-frequency resonance with shimmering spatial reflections',
+      style: 'from-purple-400 to-pink-500',
+    },
+    cyber: {
+      id: 'cyber',
+      name: 'Cyber Pulse',
+      pitch: 0.75,
+      rate: 1.25,
+      carrierFreq: 963,
+      description: 'Accelerated robotic vocoder cadence engineered for high-throughput syntax',
+      style: 'from-emerald-400 to-cyan-400',
+    },
+    tranquil: {
+      id: 'tranquil',
+      name: 'Tranquil Aura',
+      pitch: 1.0,
+      rate: 0.82,
+      carrierFreq: 639,
+      description: 'Warm, meditative stasis cadence calibrated to Solfeggio heart resonance',
+      style: 'from-amber-400 to-rose-400',
+    },
+  };
+
+  public getVoiceProfiles() {
+    return Object.values(AudioVoiceService.PROFILES);
+  }
+
+  public getCurrentProfile() {
+    return AudioVoiceService.PROFILES[this.currentProfileId] || AudioVoiceService.PROFILES.sovereign;
+  }
+
+  public setVoiceProfile(profileId: string) {
+    const profile = AudioVoiceService.PROFILES[profileId.toLowerCase()];
+    if (profile) {
+      this.currentProfileId = profile.id;
+      this.pitch = profile.pitch;
+      this.rate = profile.rate;
+      this.playTone(profile.carrierFreq, 'sine', 150, 0.03);
+      return profile;
+    }
+    return null;
+  }
+
+  public playEarcon(type: 'command' | 'success' | 'error' | 'stream' | 'switch' | 'ping'): void {
+    switch (type) {
+      case 'command':
+        this.playTone(880, 'sine', 45, 0.02);
+        break;
+      case 'success':
+        this.playTone(660, 'sine', 50, 0.02);
+        setTimeout(() => this.playTone(1320, 'sine', 80, 0.025), 45);
+        break;
+      case 'error':
+        this.playTone(220, 'sawtooth', 120, 0.035);
+        break;
+      case 'stream':
+        this.playTone(528, 'sine', 40, 0.015);
+        setTimeout(() => this.playTone(792, 'triangle', 60, 0.02), 35);
+        setTimeout(() => this.playTone(1056, 'sine', 90, 0.025), 75);
+        break;
+      case 'switch':
+        this.playTone(440, 'triangle', 40, 0.02);
+        setTimeout(() => this.playTone(660, 'sine', 50, 0.02), 30);
+        break;
+      case 'ping':
+        this.playTone(1760, 'sine', 30, 0.03);
+        break;
+    }
+  }
+
+  public onAnnounce(cb: (message: string, assertive: boolean) => void): () => void {
+    this.announcerListeners.push(cb);
+    return () => {
+      this.announcerListeners = this.announcerListeners.filter((l) => l !== cb);
+    };
+  }
+
+  public announce(message: string, assertive = false): void {
+    this.announcerListeners.forEach((cb) => cb(message, assertive));
+  }
+
+  // =========================================================================
   // AUDIO SYNTHESIZER FEEDBACK TONES & TTS
   // =========================================================================
 

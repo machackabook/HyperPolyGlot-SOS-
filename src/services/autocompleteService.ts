@@ -5,7 +5,7 @@
 
 export interface CommandSuggestion {
   command: string;
-  category: 'System' | 'VFS' | '3D Visuals' | 'AI & Voice' | 'Satcom' | 'Swarm' | 'Fintech' | 'Quine' | 'Custom';
+  category: 'System' | 'VFS' | '3D Visuals' | 'AI & Voice' | 'Satcom' | 'Swarm' | 'Fintech' | 'Quine' | 'Custom' | 'D3 Stream' | 'Network';
   description: string;
   badge: string;
   badgeColor?: string;
@@ -103,6 +103,29 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'mcp list', category: 'System', description: 'List active in-process Model Context Protocol servers', badge: 'MCP' },
   { command: 'macro list', category: 'System', description: 'Display all recorded automated VFS shell scripts', badge: 'MACRO' },
   { command: 'macro record deploy_flow', category: 'System', description: 'Record sequence of terminal commands to VFS script', badge: 'REC' },
+
+  // D3 Live Data Streams & Telemetry
+  { command: 'd3 stream', category: 'D3 Stream', description: 'Toggle real-time D3.js background network data stream', badge: 'D3' },
+  { command: 'd3 shape force', category: 'D3 Stream', description: 'Render D3 Force-Directed dynamic node mesh topology', badge: 'D3' },
+  { command: 'd3 shape streamgraph', category: 'D3 Stream', description: 'Render D3 Dynamic multi-layer flowing bandwidth streamgraph', badge: 'D3' },
+  { command: 'd3 shape radar', category: 'D3 Stream', description: 'Render D3 Orbital radial telemetry sweep matrix', badge: 'D3' },
+  { command: 'd3 shape chord', category: 'D3 Stream', description: 'Render D3 Satellite constellation chord transfer ring', badge: 'D3' },
+  { command: 'd3 panel', category: 'D3 Stream', description: 'Toggle floating D3 telemetry HUD control panel', badge: 'HUD' },
+  { command: 'ping satcom.orb.net', category: 'Network', description: 'Send ICMP network stream packets and render D3 telemetry', badge: 'NET' },
+  { command: 'netstat -a', category: 'Network', description: 'Inspect active sockets and visualize live network mesh in D3', badge: 'NET' },
+  { command: 'curl https://api.matrix.os/stream', category: 'Network', description: 'Stream remote payload and trigger D3 packet burst', badge: 'NET' },
+
+  // Command History & Reverse Search
+  { command: 'history', category: 'System', description: 'Open interactive command history modal overlay (Ctrl+R)', badge: 'HIST' },
+  { command: 'history --export', category: 'System', description: 'Export command history log to shell script file in VFS', badge: 'HIST' },
+
+  // Voice Personas & Accessibility
+  { command: 'voice profile sovereign', category: 'AI & Voice', description: 'Switch to Sovereign Core (432 Hz, authoritative)', badge: 'VOICE' },
+  { command: 'voice profile quantum', category: 'AI & Voice', description: 'Switch to Quantum Echo (528 Hz, harmonic shimmer)', badge: 'VOICE' },
+  { command: 'voice profile cyber', category: 'AI & Voice', description: 'Switch to Cyber Pulse (963 Hz, robotic vocoder)', badge: 'VOICE' },
+  { command: 'voice profile tranquil', category: 'AI & Voice', description: 'Switch to Tranquil Aura (639 Hz, soft meditative stasis)', badge: 'VOICE' },
+  { command: 'contrast on', category: 'System', description: 'Enable high-contrast accessibility visual theme', badge: 'A11Y' },
+  { command: 'chromevox on', category: 'System', description: 'Activate ChromeVox screen-reader ARIA live protocols', badge: 'A11Y' },
 
   // Quine
   { command: 'quine export', category: 'Quine', description: 'Export self-replicating standalone offline HTML Quine', badge: 'QUINE' },

@@ -23,6 +23,9 @@ import {
   HelpCircle,
   Mic,
   MicOff,
+  History as HistoryIcon,
+  Network,
+  Accessibility,
 } from 'lucide-react';
 import {
   EnvironmentState,
@@ -30,6 +33,8 @@ import {
   TerminalLine,
   TopologyType,
   SentimentType,
+  CommandHistoryItem,
+  D3StreamShape,
 } from '../types';
 import { vfs } from '../services/vfsService';
 import { audioVoiceService } from '../services/audioVoiceService';
@@ -38,6 +43,9 @@ import { getCommandSuggestions, CommandSuggestion } from '../services/autocomple
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
+import { D3DataStreamVisualizer } from './D3DataStreamVisualizer';
+import { CommandHistoryModal } from './CommandHistoryModal';
+import { VoiceProfileModal } from './VoiceProfileModal';
 
 interface HyperTerminalProps {
   envState: EnvironmentState;
@@ -91,6 +99,42 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   // In-terminal editor state
   const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
 
+  // Modals & History State
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [chromeVoxAnnounce, setChromeVoxAnnounce] = useState('');
+  const [commandHistoryItems, setCommandHistoryItems] = useState<CommandHistoryItem[]>([
+    {
+      id: 'hist-init-1',
+      command: 'render torus',
+      timestamp: '10:00:01 AM',
+      category: '3D',
+      status: 'success',
+      durationMs: 14,
+      cwd: '/root',
+      starred: true,
+    },
+    {
+      id: 'hist-init-2',
+      command: 'satcom ping',
+      timestamp: '10:02:15 AM',
+      category: 'NET',
+      status: 'success',
+      durationMs: 33,
+      cwd: '/root',
+      starred: true,
+    },
+    {
+      id: 'hist-init-3',
+      command: 'd3 shape force',
+      timestamp: '10:05:42 AM',
+      category: 'NET',
+      status: 'success',
+      durationMs: 22,
+      cwd: '/root',
+    },
+  ]);
+
   // Macro recorder state
   const [recordingMacro, setRecordingMacro] = useState<string | null>(null);
   const macroBufferRef = useRef<string[]>([]);
@@ -132,6 +176,26 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     });
     return unsub;
   }, [activeInstanceId, activeInstance.cwd]);
+
+  // Announce listener for ChromeVox / Screen reader
+  useEffect(() => {
+    const unsub = audioVoiceService.onAnnounce((msg) => {
+      setChromeVoxAnnounce(msg);
+    });
+    return unsub;
+  }, []);
+
+  // Global Ctrl+R hotkey to open history modal
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        setIsHistoryModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   // Toggle microphone input handler
   const handleToggleMic = async () => {
@@ -203,7 +267,40 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
       )
     );
 
-    await processCommand(raw);
+    const startTime = performance.now();
+    let status: 'success' | 'error' = 'success';
+    try {
+      await processCommand(raw);
+    } catch {
+      status = 'error';
+    } finally {
+      const durationMs = Math.round(performance.now() - startTime);
+      const parts = raw.split(/\s+/);
+      const cmdName = parts[0].toLowerCase();
+      let category = 'SYS';
+      if (['render', 'topology', 'color', 'gravity', 'speed', 'turbulence', 'burst', 'calm', 'shatter'].includes(cmdName)) category = '3D';
+      else if (['gemini', 'ai', 'ask', 'voice', 'speak', 'mic', 'listen', '963'].includes(cmdName)) category = 'AI';
+      else if (['ls', 'cd', 'pwd', 'cat', 'touch', 'mkdir', 'rm', 'edit', 'nano', 'tree', 'find', 'grep', 'vfs'].includes(cmdName)) category = 'VFS';
+      else if (['d3', 'ping', 'netstat', 'curl', 'fetch', 'satcom', 'swarm', 'stream'].includes(cmdName)) category = 'NET';
+      else if (['node', 'js', 'git', 'macro'].includes(cmdName)) category = 'DEV';
+
+      setCommandHistoryItems((prev) => [
+        ...prev,
+        {
+          id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          command: raw,
+          timestamp: new Date().toLocaleTimeString(),
+          category,
+          status,
+          durationMs,
+          cwd: activeInstance.cwd,
+        },
+      ]);
+
+      if (envState.chromeVoxEnabled) {
+        audioVoiceService.announce(`Command ${raw} finished with status ${status}.`);
+      }
+    }
   };
 
   // Main Command Processor Engine
@@ -661,7 +758,30 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
 
           const data = await resp.json();
 
-          // Modulate background 3D/4D environment based on AI sentiment & context!
+          // Modulate background 3D visual and D3 Stream based on AI response!
+          let d3Update: Partial<EnvironmentState['d3Stream']> = {};
+          if (data.d3Stream) {
+            d3Update = { ...data.d3Stream, active: true };
+          } else if (/network|packet|stream|telemetry|d3|node|graph|traffic|throughput|satcom|ping|cluster|socket/i.test(argStr)) {
+            const chosenShape: D3StreamShape = /radar|scan|orbital/i.test(argStr)
+              ? 'radar'
+              : /stream|wave|bandwidth/i.test(argStr)
+              ? 'streamgraph'
+              : /chord|satellite|ring/i.test(argStr)
+              ? 'chord'
+              : 'force';
+            d3Update = {
+              active: true,
+              shape: chosenShape,
+              title: `Gemini ${chosenShape.toUpperCase()} Telemetry`,
+              lastCommand: `gemini: ${argStr.slice(0, 18)}`,
+              geminiTelemetrySummary: data.speechText || `Gemini Telemetry Stream: ${argStr}`,
+              packetRate: Math.floor(Math.random() * 800 + 1600),
+              throughputMbps: +(Math.random() * 300 + 850).toFixed(1),
+            };
+            audioVoiceService.playEarcon('stream');
+          }
+
           setEnvState((prev) => ({
             ...prev,
             topology: (data.topology as TopologyType) || prev.topology,
@@ -672,6 +792,11 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
             gravity: data.gravity !== undefined ? data.gravity : prev.gravity,
             turbulence: data.turbulence !== undefined ? data.turbulence : prev.turbulence,
             floatingGlyph: data.floatingGlyph || '⨋',
+            d3Stream: {
+              ...prev.d3Stream,
+              ...d3Update,
+              geminiTelemetrySummary: data.speechText || data.reply?.slice(0, 120) || prev.d3Stream.geminiTelemetrySummary,
+            },
           }));
 
           // Render formatted response in terminal
@@ -684,13 +809,19 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
           }
         } catch (err: any) {
           appendLine(`AI Query Note: ${err.message}. Using deterministic local engine.`, 'warn');
-          // Local fallback
+          const chosenShape: D3StreamShape = /radar|scan/i.test(argStr) ? 'radar' : /stream|wave/i.test(argStr) ? 'streamgraph' : 'force';
           setEnvState((prev) => ({
             ...prev,
             sentiment: 'analytical',
             primaryColor: '#00f2ff',
             secondaryColor: '#a855f7',
             speed: 1.2,
+            d3Stream: {
+              ...prev.d3Stream,
+              active: true,
+              shape: chosenShape,
+              geminiTelemetrySummary: `Neural Stream: Query "${argStr.slice(0, 32)}" synthesized to D3 ${chosenShape}.`,
+            },
           }));
           const fallbackSpeech = `Analyzed your query: ${argStr.slice(0, 30)}. Background visual modulated.`;
           appendLine(`[Neural Core]: ${fallbackSpeech}`, 'ai', '⨋');
@@ -705,7 +836,25 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
 
       case 'voice': {
         const sub = (args[0] || '').toLowerCase();
-        if (sub === 'on') {
+        if (sub === 'profile' || sub === 'persona') {
+          if (args[1]) {
+            const p = audioVoiceService.setVoiceProfile(args[1]);
+            if (p) {
+              setEnvState((prev) => ({
+                ...prev,
+                voiceProfile: p.id,
+                voicePitch: p.pitch,
+                voiceRate: p.rate,
+              }));
+              appendLine(`Voice Profile switched to [${p.name.toUpperCase()}] (${p.carrierFreq} Hz): ${p.description}`, 'success', '🎙️');
+            } else {
+              appendLine(`Unknown profile '${args[1]}'. Available: sovereign, quantum, cyber, tranquil`, 'error');
+            }
+          } else {
+            setIsVoiceModalOpen(true);
+            appendLine('Opened Neural Voice Profile selector modal.', 'system');
+          }
+        } else if (sub === 'on') {
           audioVoiceService.setVoiceEnabled(true);
           setEnvState((prev) => ({ ...prev, voiceActive: true }));
           appendLine('AI voice responses enabled. Speech will vocalize and project into background 3D visual.', 'success');
@@ -721,7 +870,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
           setEnvState((prev) => ({ ...prev, voicePitch: pitch, voiceRate: rate }));
           appendLine(`Voice tuned: Pitch=${pitch}, Rate=${rate}x`, 'success');
         } else {
-          appendLine(`Voice Status: ${envState.voiceActive ? 'ACTIVE' : 'MUTED'}. Usage: voice on|off|tune <pitch> <rate>`, 'system');
+          setIsVoiceModalOpen(true);
         }
         break;
       }
@@ -821,26 +970,60 @@ Attractor Gravity Well: Active   Mode: WITHOUT GOVERNOR`, 'output');
 
       case 'satcom': {
         const sub = (args[0] || 'status').toLowerCase();
+        setEnvState((prev) => ({
+          ...prev,
+          d3Stream: {
+            ...prev.d3Stream,
+            active: true,
+            shape: 'chord',
+            title: 'ATSC Satcom Rebound Relay (533.25 MHz)',
+            lastCommand: `satcom ${sub}`,
+            throughputMbps: 914.8,
+            packetRate: 2450,
+            geminiTelemetrySummary: 'Satcom ATSC 4-Hop Rebound active across 6k ground & LEO node matrix.',
+          },
+        }));
+        audioVoiceService.playEarcon('stream');
+
         if (sub === 'ping' || sub === 'rebound') {
           appendLine(`[SATCOM ATSC REBOUND] Injected test packet ping:
   Ground Beacon -> 6k Node Cluster -> LEO Sat 99 -> ATSC Tower 04 -> Beacon Return
-  Round-Trip Latency: 33.3ms pulse   Signal: -58 dBm   Packet Drops: -0`, 'good', '📡');
+  Round-Trip Latency: 33.3ms pulse   Signal: -58 dBm   Packet Drops: -0
+  [D3 Satellite Constellation Chord Ring Rendered in Background]`, 'good', '📡');
           audioVoiceService.playTone(1420, 'sine', 150);
         } else {
           appendLine(`SATCOM ATSC CIRCULAR REBOUND RELAY
 Frequency: 533.25 MHz UHF Channel 24 | Ping Loaded Datacom: 84.2%
-Active Hops: 4 (Circular Reflection Loop Guaranteed)`, 'output');
+Active Hops: 4 (Circular Reflection Loop Guaranteed)
+[D3 Satellite Constellation Chord Ring Rendered in Background]`, 'output');
         }
         break;
       }
 
       case 'swarm': {
+        setEnvState((prev) => ({
+          ...prev,
+          d3Stream: {
+            ...prev.d3Stream,
+            active: true,
+            shape: 'force',
+            title: '6,000-Node Tethermesh Swarm',
+            lastCommand: 'swarm',
+            nodeCount: 44,
+            packetRate: 3600,
+            throughputMbps: 1250.0,
+            geminiTelemetrySummary: 'Tethermesh Cluster: 6,000 nodes synchronized. Threat pruning and cache defense active.',
+          },
+        }));
+        audioVoiceService.playEarcon('stream');
+
         appendLine(`6,000-NODE VIRTUAL AGENT SWARM (TETHERMESH CLUSTER)
   - Vanguard Brigade : 2,000 Nodes (Threat Pruning Active)
   - Shield Division  : 2,000 Nodes (Memory & Cache Defense)
   - Recon Brigade    : 1,500 Nodes (Network Anomaly Scanning)
   - God-Sovereign    : 500 Nodes   (Soul Stone Policy Enforcers)
-Status: 100% HEALTHY   Packet Drop Rate: -0.00%`, 'output');
+Status: 100% HEALTHY   Packet Drop Rate: -0.00%
+[D3 6k Node Cluster Force Graph Active in Background]`, 'output');
         break;
       }
 
@@ -943,8 +1126,219 @@ Current VFS, WebGL Shaders, and Terminal Engine are compiled into an immutable s
           speed: envState.speed,
           voiceActive: envState.voiceActive,
           solfeggio963: envState.solfeggio963,
+          d3StreamActive: envState.d3Stream.active,
+          d3Shape: envState.d3Stream.shape,
+          voiceProfile: envState.voiceProfile,
+          chromeVox: envState.chromeVoxEnabled,
+          highContrast: envState.highContrast,
         };
         appendLine(JSON.stringify(stats, null, 2), 'table');
+        break;
+      }
+
+      case 'd3': {
+        const sub = (args[0] || 'stream').toLowerCase();
+        if (sub === 'stream' || sub === 'toggle') {
+          const next = !envState.d3Stream.active;
+          setEnvState((prev) => ({
+            ...prev,
+            d3Stream: { ...prev.d3Stream, active: next, lastCommand: 'd3 stream' },
+          }));
+          audioVoiceService.playEarcon(next ? 'stream' : 'switch');
+          appendLine(`D3.js Real-Time Data Stream ${next ? 'ACTIVATED in background' : 'DEACTIVATED'}.`, next ? 'success' : 'system', '⚡');
+        } else if (sub === 'shape') {
+          const s = (args[1] || 'force').toLowerCase() as D3StreamShape;
+          if (['force', 'streamgraph', 'radar', 'chord'].includes(s)) {
+            setEnvState((prev) => ({
+              ...prev,
+              d3Stream: { ...prev.d3Stream, active: true, shape: s, lastCommand: `d3 shape ${s}` },
+            }));
+            audioVoiceService.playEarcon('switch');
+            appendLine(`D3 visualizer shape morphed to [${s.toUpperCase()}].`, 'success');
+          } else {
+            appendLine('Usage: d3 shape <force|streamgraph|radar|chord>', 'error');
+          }
+        } else if (sub === 'density') {
+          const val = parseInt(args[1], 10);
+          if (!isNaN(val) && val >= 12 && val <= 64) {
+            setEnvState((prev) => ({
+              ...prev,
+              d3Stream: { ...prev.d3Stream, nodeCount: val },
+            }));
+            appendLine(`D3 node density set to ${val} nodes.`, 'success');
+          } else {
+            appendLine('Usage: d3 density <12 - 64>', 'error');
+          }
+        } else if (sub === 'speed') {
+          const val = parseFloat(args[1]);
+          if (!isNaN(val) && val >= 0.4 && val <= 3.0) {
+            setEnvState((prev) => ({
+              ...prev,
+              d3Stream: { ...prev.d3Stream, intensity: val },
+            }));
+            appendLine(`D3 streamflow speed multiplier set to ${val.toFixed(1)}x`, 'success');
+          } else {
+            appendLine('Usage: d3 speed <0.4 - 3.0>', 'error');
+          }
+        } else if (sub === 'palette') {
+          const pal = (args[1] || 'cyan').toLowerCase() as any;
+          if (['cyan', 'fuchsia', 'matrix', 'amber', 'cyberpunk'].includes(pal)) {
+            setEnvState((prev) => ({
+              ...prev,
+              d3Stream: { ...prev.d3Stream, palette: pal },
+            }));
+            appendLine(`D3 chromatic palette set to [${pal.toUpperCase()}].`, 'success');
+          } else {
+            appendLine('Usage: d3 palette <cyan|fuchsia|matrix|amber|cyberpunk>', 'error');
+          }
+        } else if (sub === 'panel') {
+          setEnvState((prev) => ({
+            ...prev,
+            d3Stream: { ...prev.d3Stream, showPanel: !prev.d3Stream.showPanel },
+          }));
+          appendLine(`D3 telemetry HUD panel ${!envState.d3Stream.showPanel ? 'SHOWN' : 'HIDDEN'}.`, 'system');
+        } else if (sub === 'burst') {
+          setEnvState((prev) => ({
+            ...prev,
+            d3Stream: {
+              ...prev.d3Stream,
+              active: true,
+              packetRate: 4800,
+              throughputMbps: 1480.2,
+              intensity: 2.5,
+              lastCommand: 'd3 burst',
+            },
+          }));
+          audioVoiceService.playEarcon('stream');
+          appendLine('⚡ High-velocity packet supernova injected into D3 background canvas!', 'good', '💥');
+          setTimeout(() => {
+            setEnvState((prev) => ({
+              ...prev,
+              d3Stream: { ...prev.d3Stream, intensity: 1.0, packetRate: 1250 },
+            }));
+          }, 3500);
+        } else {
+          appendLine(`D3 Data Stream Engine: Status=${envState.d3Stream.active ? 'ACTIVE' : 'IDLE'} Shape=[${envState.d3Stream.shape}]
+Usage: d3 stream | shape <force|streamgraph|radar|chord> | density <n> | speed <n> | palette <name> | panel | burst`, 'system');
+        }
+        break;
+      }
+
+      case 'ping': {
+        const target = args[0] || 'satcom.orb.net';
+        audioVoiceService.playEarcon('ping');
+        setEnvState((prev) => ({
+          ...prev,
+          d3Stream: {
+            ...prev.d3Stream,
+            active: true,
+            shape: prev.d3Stream.shape === 'radar' ? 'radar' : 'force',
+            title: `ICMP Ping Stream -> ${target}`,
+            lastCommand: `ping ${target}`,
+            packetRate: Math.floor(Math.random() * 500 + 1200),
+            throughputMbps: +(Math.random() * 200 + 400).toFixed(1),
+            jitterMs: +(Math.random() * 0.8 + 0.4).toFixed(2),
+            geminiTelemetrySummary: `Network Echo: Round-trip packet transmission verified to ${target} with zero drop.`,
+          },
+        }));
+
+        appendLine(`PING ${target} (192.0.2.${Math.floor(Math.random() * 200 + 1)}): 56 data bytes
+64 bytes from ${target}: icmp_seq=0 ttl=118 time=12.4 ms [D3 Stream Synchronized]
+64 bytes from ${target}: icmp_seq=1 ttl=118 time=11.8 ms
+64 bytes from ${target}: icmp_seq=2 ttl=118 time=13.1 ms
+64 bytes from ${target}: icmp_seq=3 ttl=118 time=12.0 ms
+--- ${target} ping statistics ---
+4 packets transmitted, 4 received, 0.0% packet loss, rtt min/avg/max = 11.8/12.3/13.1 ms`, 'output', '📡');
+        break;
+      }
+
+      case 'netstat': {
+        audioVoiceService.playEarcon('stream');
+        setEnvState((prev) => ({
+          ...prev,
+          d3Stream: {
+            ...prev.d3Stream,
+            active: true,
+            shape: 'force',
+            title: 'Socket Connection Mesh',
+            lastCommand: 'netstat',
+            nodeCount: 36,
+            packetRate: 1850,
+            throughputMbps: 924.5,
+            geminiTelemetrySummary: 'Live Network Sockets: 8 TCP established, 4 UDP telemetry streams active.',
+          },
+        }));
+
+        appendLine(`Active Internet connections (servers and established)
+Proto Recv-Q Send-Q Local Address          Foreign Address        State       D3_NODE
+tcp        0      0 127.0.0.1:3000         0.0.0.0:*              LISTEN      GATEWAY-0
+tcp        0      0 127.0.0.1:8080         0.0.0.0:*              LISTEN      EDGE-1
+tcp        0      0 10.0.4.12:44320        142.250.190.46:443     ESTABLISHED EDGE-4
+tcp        0      0 10.0.4.12:53325        533.25.MHz.atsc:sat    ESTABLISHED EDGE-8
+udp        0      0 0.0.0.0:963            0.0.0.0:*                          SOLFEGGIO
+udp        0      0 0.0.0.0:1420           satcom.orb.net:1420    CONNECTED   EDGE-12
+[D3 Network Force Mesh Rendered in Background]`, 'table');
+        break;
+      }
+
+      case 'curl':
+      case 'fetch': {
+        const url = args[0] || 'https://api.matrix.os/stream';
+        audioVoiceService.playEarcon('stream');
+        setEnvState((prev) => ({
+          ...prev,
+          d3Stream: {
+            ...prev.d3Stream,
+            active: true,
+            shape: 'streamgraph',
+            title: `HTTP Payload Stream (${url.slice(0, 24)})`,
+            lastCommand: `curl ${url}`,
+            throughputMbps: 1120.4,
+            packetRate: 3400,
+            geminiTelemetrySummary: `HTTP 200 Stream Transfer from ${url} complete. Bandwidth allocated.`,
+          },
+        }));
+
+        appendLine(`HTTP/2 200 OK
+server: Matrix-Gateway/4.1.0-sovereign
+date: ${new Date().toUTCString()}
+content-type: application/octet-stream; charset=binary
+x-d3-stream-throughput: 1120.4 MB/s
+x-telemetry-status: STREAM_ACTIVE
+
+{"status":"ok","nodes_active":6000,"carrier":"533.25MHz","quanta_flow":"optimal"}`, 'table');
+        break;
+      }
+
+      case 'history': {
+        if (args[0] === '--export' || args[0] === '-e') {
+          const script = `#!/bin/bash\n# HyperTerminal Session History Export\n# Exported at ${new Date().toISOString()}\n\n` +
+            commandHistoryItems.map((h) => `# [${h.timestamp}] (${h.status}) in ${h.cwd}\n${h.command}`).join('\n\n');
+          vfs.writeFile('/root', '/root/history_session.sh', script);
+          appendLine(`Exported ${commandHistoryItems.length} command history entries to '/root/history_session.sh'.`, 'success', '💾');
+        } else {
+          setIsHistoryModalOpen(true);
+          appendLine('Opened Interactive Command History Modal (Ctrl+R).', 'system');
+        }
+        break;
+      }
+
+      case 'contrast': {
+        const next = args[0] === 'on' ? true : args[0] === 'off' ? false : !envState.highContrast;
+        setEnvState((prev) => ({ ...prev, highContrast: next }));
+        audioVoiceService.playEarcon('switch');
+        appendLine(`High-Contrast visual accessibility matrix ${next ? 'ACTIVATED' : 'DISABLED'}.`, 'system');
+        break;
+      }
+
+      case 'chromevox': {
+        const next = args[0] === 'on' ? true : args[0] === 'off' ? false : !envState.chromeVoxEnabled;
+        setEnvState((prev) => ({ ...prev, chromeVoxEnabled: next }));
+        audioVoiceService.playEarcon(next ? 'success' : 'error');
+        if (next) {
+          audioVoiceService.announce('ChromeVox screen-reader protocol enabled for HyperTerminal.');
+        }
+        appendLine(`ChromeVox screen reader ARIA live protocols ${next ? 'ACTIVATED' : 'DISABLED'}.`, next ? 'success' : 'system');
         break;
       }
 
@@ -1231,11 +1625,13 @@ Current VFS, WebGL Shaders, and Terminal Engine are compiled into an immutable s
         <div
           className={`${containerPositionClass} z-30 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 font-mono select-none relative`}
           style={{
-            backgroundColor: `rgba(4, 9, 20, ${envState.terminalOpacity})`,
+            backgroundColor: envState.highContrast ? 'rgba(0, 0, 0, 0.98)' : `rgba(4, 9, 20, ${envState.terminalOpacity})`,
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
-            border: `1px solid ${envState.primaryColor}55`,
-            boxShadow: `0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px ${envState.primaryColor}22`,
+            border: envState.highContrast ? '2px solid #00f2ff' : `1px solid ${envState.primaryColor}55`,
+            boxShadow: envState.highContrast
+              ? '0 0 30px rgba(0, 242, 255, 0.5), inset 0 0 20px rgba(0, 242, 255, 0.2)'
+              : `0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px ${envState.primaryColor}22`,
           }}
         >
           {/* Real-time Microphone Audio Waveform & Pulse Border */}
@@ -1317,22 +1713,49 @@ Current VFS, WebGL Shaders, and Terminal Engine are compiled into an immutable s
                 <span className="hidden sm:inline">963Hz</span>
               </button>
 
-              {/* Voice Toggle */}
+              {/* Real-time D3 Stream Toggle */}
               <button
                 onClick={() => {
-                  const next = !envState.voiceActive;
-                  audioVoiceService.setVoiceEnabled(next);
-                  setEnvState((prev) => ({ ...prev, voiceActive: next }));
+                  const next = !envState.d3Stream.active;
+                  setEnvState((prev) => ({
+                    ...prev,
+                    d3Stream: { ...prev.d3Stream, active: next, lastCommand: 'toolbar toggle' },
+                  }));
+                  audioVoiceService.playEarcon(next ? 'stream' : 'switch');
                 }}
                 className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                  envState.voiceActive
-                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
+                  envState.d3Stream.active
+                    ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_12px_rgba(0,242,255,0.35)]'
                     : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
                 }`}
-                title="Toggle AI Speech Voice Response"
+                title="Toggle Real-Time D3.js Data Stream Background Visualizer"
               >
-                <Radio className="w-3 h-3" />
-                <span className="hidden sm:inline">VOICE</span>
+                <Network className="w-3 h-3 text-cyan-400" />
+                <span className="hidden sm:inline">D3 STREAM</span>
+              </button>
+
+              {/* Neural Voice Profile Selector Modal */}
+              <button
+                onClick={() => setIsVoiceModalOpen(true)}
+                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                  envState.voiceActive
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.25)]'
+                    : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title="Open Neural Voice & ChromeVox Profile Matrix"
+              >
+                <Radio className="w-3 h-3 text-purple-400" />
+                <span className="hidden sm:inline">VOICE: {envState.voiceProfile.toUpperCase()}</span>
+              </button>
+
+              {/* Command History Modal Trigger (Ctrl+R) */}
+              <button
+                onClick={() => setIsHistoryModalOpen(true)}
+                className="px-2 py-1 rounded-md bg-black/40 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                title="Open Interactive Command History Browser (Ctrl+R)"
+              >
+                <HistoryIcon className="w-3 h-3 text-cyan-400" />
+                <span className="hidden md:inline">HISTORY</span>
               </button>
 
               {/* Quine Download */}
@@ -1563,6 +1986,80 @@ Current VFS, WebGL Shaders, and Terminal Engine are compiled into an immutable s
           </form>
         </div>
       )}
+
+      {/* Real-Time D3.js Data Stream Background Visualizer */}
+      <D3DataStreamVisualizer
+        config={envState.d3Stream}
+        onConfigChange={(updated) =>
+          setEnvState((prev) => ({
+            ...prev,
+            d3Stream: { ...prev.d3Stream, ...updated },
+          }))
+        }
+        primaryColor={envState.primaryColor}
+        secondaryColor={envState.secondaryColor}
+      />
+
+      {/* Interactive Command History Browser Modal (Ctrl+R / 'history') */}
+      <CommandHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        historyItems={commandHistoryItems}
+        onSelectCommand={(cmd, executeImmediately) => {
+          if (executeImmediately) {
+            handleCommandSubmit(undefined, cmd);
+          } else {
+            setInputVal(cmd);
+            inputRef.current?.focus();
+          }
+        }}
+        onClearHistory={() => {
+          setCommandHistoryItems([]);
+          audioVoiceService.playTone(220, 'sawtooth', 80);
+          appendLine('Command history cleared.', 'system');
+        }}
+        onToggleStar={(id) => {
+          setCommandHistoryItems((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, starred: !item.starred } : item))
+          );
+        }}
+        onExportHistory={() => {
+          const script = `#!/bin/bash\n# HyperTerminal Session History Export\n# Exported at ${new Date().toISOString()}\n\n` +
+            commandHistoryItems.map((h) => `# [${h.timestamp}] (${h.status}) in ${h.cwd}\n${h.command}`).join('\n\n');
+          vfs.writeFile('/root', '/root/history_session.sh', script);
+          appendLine(`Exported ${commandHistoryItems.length} history commands to /root/history_session.sh`, 'success', '💾');
+        }}
+      />
+
+      {/* Multi-Faceted Neural Voice & ChromeVox Accessibility Profile Modal */}
+      <VoiceProfileModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        currentProfileId={envState.voiceProfile}
+        onSelectProfile={(profileId) => {
+          setEnvState((prev) => ({ ...prev, voiceProfile: profileId }));
+          appendLine(`Voice profile set to: ${profileId.toUpperCase()}`, 'success');
+        }}
+        pitch={envState.voicePitch}
+        rate={envState.voiceRate}
+        onPitchChange={(p) => setEnvState((prev) => ({ ...prev, voicePitch: p }))}
+        onRateChange={(r) => setEnvState((prev) => ({ ...prev, voiceRate: r }))}
+        chromeVoxEnabled={envState.chromeVoxEnabled}
+        onToggleChromeVox={(enabled) => setEnvState((prev) => ({ ...prev, chromeVoxEnabled: enabled }))}
+        highContrast={envState.highContrast}
+        onToggleHighContrast={(enabled) => setEnvState((prev) => ({ ...prev, highContrast: enabled }))}
+      />
+
+      {/* ChromeVox Screen Reader ARIA Live Announcer Region */}
+      <div
+        id="chromevox-announcer"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only pointer-events-none"
+      >
+        {chromeVoxAnnounce}
+      </div>
     </>
   );
 };

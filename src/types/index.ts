@@ -19,6 +19,36 @@ export type SentimentType =
   | 'cosmic'
   | 'chaos';
 
+export type D3StreamShape = 'force' | 'streamgraph' | 'radar' | 'chord';
+
+export interface D3StreamConfig {
+  active: boolean;
+  shape: D3StreamShape;
+  title: string;
+  packetRate: number; // packets/sec
+  throughputMbps: number; // MB/s
+  nodeCount: number;
+  linkTension: number;
+  jitterMs: number;
+  packetLossPct: number;
+  palette: 'cyan' | 'fuchsia' | 'matrix' | 'amber' | 'cyberpunk';
+  geminiTelemetrySummary: string;
+  showPanel: boolean;
+  lastCommand: string;
+  intensity: number;
+}
+
+export interface CommandHistoryItem {
+  id: string;
+  command: string;
+  timestamp: string;
+  category: string;
+  status: 'success' | 'error' | 'pending';
+  durationMs: number;
+  cwd: string;
+  starred?: boolean;
+}
+
 export interface EnvironmentState {
   topology: TopologyType;
   sentiment: SentimentType;
@@ -34,12 +64,16 @@ export interface EnvironmentState {
   voicePitch: number;
   voiceRate: number;
   voiceName: string;
+  voiceProfile: string;
   solfeggio963: boolean;
   wireframe: boolean;
   bloomIntensity: number;
   audioReactiveLevel: number;
   terminalOpacity: number;
   terminalDock: 'bottom' | 'floating' | 'fullscreen';
+  highContrast: boolean;
+  chromeVoxEnabled: boolean;
+  d3Stream: D3StreamConfig;
 }
 
 export interface VfsFileMetadata {
@@ -90,6 +124,7 @@ export interface AIResponsePayload {
   gravity?: number;
   turbulence?: number;
   floatingGlyph?: string;
+  d3Stream?: Partial<D3StreamConfig>;
 }
 
 export interface CommandContext {

@@ -89,6 +89,12 @@ const COMMAND_SUBSYSTEMS = {
     'voip',
     'mcp',
     'quine',
+    'd3',
+    'ping',
+    'netstat',
+    'curl',
+    'fetch',
+    'stream',
   ]),
   dev: new Set([
     'node',
@@ -110,6 +116,8 @@ const COMMAND_SUBSYSTEMS = {
     'exit',
     'echo',
     'history',
+    'contrast',
+    'chromevox',
   ]),
 };
 
@@ -175,6 +183,19 @@ const SUBCOMMANDS = new Set([
   'tune',
   'eval',
   'explain',
+  'shape',
+  'force',
+  'streamgraph',
+  'radar',
+  'chord',
+  'density',
+  'profile',
+  'sovereign',
+  'quantum',
+  'cyber',
+  'tranquil',
+  'palette',
+  'panel',
 ]);
 
 const OPERATORS = new Set(['|', '&&', '||', ';', '>', '>>', '<', '&']);

@@ -69,3 +69,15 @@ test('analyzeCommandSyntax flags unknown command as unregistered', () => {
   assert.equal(analysis.primaryCommand, 'foobar');
   assert.equal(analysis.hasError, true);
 });
+
+test('analyzeCommandSyntax correctly classifies D3 and network commands', () => {
+  const d3Analysis = analyzeCommandSyntax('d3 shape streamgraph');
+  assert.equal(d3Analysis.primaryCommand, 'd3');
+  assert.equal(d3Analysis.commandCategory, 'CORE SWARM');
+  assert.equal(d3Analysis.hasError, false);
+
+  const histAnalysis = analyzeCommandSyntax('history --export');
+  assert.equal(histAnalysis.primaryCommand, 'history');
+  assert.equal(histAnalysis.hasError, false);
+  assert.deepEqual(histAnalysis.flags, ['--export']);
+});

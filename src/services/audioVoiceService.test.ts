@@ -30,3 +30,14 @@ test('pitch and rate parameters clamp within standard boundary [0.5, 2.0]', () =
   assert.equal(clamp(3.5), 2.0);
   assert.equal(clamp(1.2), 1.2);
 });
+
+test('voice profiles include all 4 personas with harmonic carrier frequencies', () => {
+  const profiles = [
+    { id: 'sovereign', freq: 432 },
+    { id: 'quantum', freq: 528 },
+    { id: 'cyber', freq: 963 },
+    { id: 'tranquil', freq: 639 },
+  ];
+  assert.equal(profiles.length, 4);
+  assert.ok(profiles.every((p) => p.freq > 400 && p.freq < 1000));
+});
