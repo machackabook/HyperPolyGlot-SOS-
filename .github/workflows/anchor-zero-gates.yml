@@ -1,0 +1,27 @@
+name: Anchor Zero proof gates
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/anchor-zero-gates.yml'
+  workflow_dispatch:
+jobs:
+  source-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Local parser tests
+        run: node --experimental-strip-types --test src/services/anchorZeroRouter.test.mjs
