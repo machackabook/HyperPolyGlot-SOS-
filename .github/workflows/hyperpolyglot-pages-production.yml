@@ -1,0 +1,64 @@
+name: HyperPolyGlot Pages production gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hyperpolyglot-pages-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install reproducible dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Type-check
+        run: npm run lint
+      - name: Verify no embedded Gemini key in frontend sources
+        shell: bash
+        run: |
+          if grep -REn '(AIza[0-9A-Za-z_-]{20,}|GEMINI_API_KEY[[:space:]]*[:=][[:space:]]*["\x27][A-Za-z0-9_-]{15,})' src index.html 2>/dev/null; then
+            echo 'Potential embedded key in public frontend' >&2
+            exit 1
+          fi
+      - name: Build for GitHub Pages subpath
+        run: npm run build -- --base=/HyperPolyGlot-SOS-/
+      - name: Confirm static build
+        run: test -s dist/index.html && test -d dist/assets
+      - name: Upload production build
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperpolyglot-pages-dist
+          path: dist/
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: hyperpolyglot-pages-dist
+          path: dist
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
