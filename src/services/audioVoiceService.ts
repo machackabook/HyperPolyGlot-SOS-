@@ -167,14 +167,13 @@ class AudioVoiceService {
       console.warn('Physical microphone unavailable, engaging synthetic acoustic analyzer:', err);
     }
 
-    // Graceful acoustic fallback mode: creates active 256-bin buffers
-    this.micFrequencyData = new Uint8Array(128);
-    this.micWaveformData = new Uint8Array(256);
-    this.isSyntheticMic = true;
-    this.isMicActive = true;
-    this.notifyMicChange(true, 0.4);
-
-    return true;
+    // Denied or unsupported capture must not masquerade as a physical microphone.
+    this.micFrequencyData = null;
+    this.micWaveformData = null;
+    this.isSyntheticMic = false;
+    this.isMicActive = false;
+    this.notifyMicChange(false, 0);
+    return false;
   }
 
   public stopMicrophone(): void {

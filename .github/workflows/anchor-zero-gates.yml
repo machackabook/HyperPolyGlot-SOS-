@@ -1,0 +1,26 @@
+name: Anchor Zero proof gates
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/anchor-zero-gates.yml'
+  workflow_dispatch:
+jobs:
+  source-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run lint
+      - name: Build
+        run: bun run build
+      - name: Local parser tests
+        run: bun test src/services/anchorZeroRouter.test.mjs
