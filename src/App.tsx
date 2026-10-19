@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { EnvironmentState } from './types';
+import { SarafinSolarisCanvas } from './components/SarafinSolarisCanvas';
 
 export function App() {
   // Global Environment State governing the 100% Background Visual Renderer & Terminal
@@ -51,6 +52,7 @@ export function App() {
     <div className="relative w-screen h-screen overflow-hidden bg-[#02050b] select-none font-mono">
       {/* 100% Visual Background Renderer (Polymorphic Neurality) */}
       <VisualRenderer3D envState={envState} />
+      <SarafinSolarisCanvas envState={envState} />
 
       {/* The Sole UI: Sovereign HyperTerminal */}
       <HyperTerminal envState={envState} setEnvState={setEnvState} />
