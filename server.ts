@@ -13,7 +13,17 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const isProduction = process.env.NODE_ENV === 'production';
-  const PORT = isProduction ? Number(process.env.PORT || 3000) : 3000;
+  let port = 3000;
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const parsed = parseInt(process.argv[portArgIdx + 1], 10);
+    if (!isNaN(parsed)) port = parsed;
+  }
+  if (process.env.PORT) {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed)) port = parsed;
+  }
+  const PORT = port;
 
   app.use(express.json());
 
@@ -35,7 +45,7 @@ async function startServer() {
   // Receives prompt, ongoing conversation history, and current environment state
   // Analyzes sentiment, dictates background 3D/4D environment alteration, and provides AI response
   app.post('/api/chat', async (req, res) => {
-    const { prompt, conversationHistory = [], currentEnv = {} } = req.body;
+    const { prompt, conversationHistory = [], currentEnv = {}, engramsContext = '' } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing prompt string' });
@@ -46,6 +56,7 @@ async function startServer() {
       try {
         const systemInstruction = `You are the Polymorphic Neural Core of HyperTerminal Polyglot Quine OS.
 Your environment is a 100% visual 3D/4D renderer background with an integrated sovereign terminal.
+${engramsContext ? `\n[AUTHORITATIVE OMNI-NEXUS & SCRIBE MEMORY ENGRAMS (gemini.md)]:\n${engramsContext.slice(0, 4000)}\n` : ''}
 Your task is to:
 1. Provide a knowledgeable, precise, cool, and technical terminal response (with helpful examples or shell commands when relevant).
 2. Analyze the sentiment and context of the user's message and the conversation.
@@ -247,9 +258,26 @@ Your task is to:
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[HyperTerminal Server] running on http://0.0.0.0:${PORT}`);
   });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[Server Error] Port ${PORT} already in use. Retrying or shutting down cleanly.`);
+    } else {
+      console.error('[Server Error]:', err);
+    }
+  });
+
+  const shutdown = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 }
 
 startServer().catch((err) => {

@@ -26,6 +26,10 @@ import {
   History as HistoryIcon,
   Network,
   Accessibility,
+  BookOpen,
+  Cloud,
+  HardDrive,
+  Music,
 } from 'lucide-react';
 import {
   EnvironmentState,
@@ -38,6 +42,8 @@ import {
 } from '../types';
 import { vfs } from '../services/vfsService';
 import { audioVoiceService } from '../services/audioVoiceService';
+import { ambientAudioService } from '../services/ambientAudioService';
+import { omniNexusService } from '../services/omniNexusService';
 import { exportQuineFile } from '../services/quineService';
 import { getCommandSuggestions, CommandSuggestion } from '../services/autocompleteService';
 import { CommandAutocomplete } from './CommandAutocomplete';
@@ -46,6 +52,8 @@ import { TerminalSyntaxInput } from './TerminalSyntaxInput';
 import { D3DataStreamVisualizer } from './D3DataStreamVisualizer';
 import { CommandHistoryModal } from './CommandHistoryModal';
 import { VoiceProfileModal } from './VoiceProfileModal';
+import { LinksBrowserModal } from './LinksBrowserModal';
+import { GoogleDriveEngramsModal, MASTER_GEMINI_MD_DEFAULT } from './GoogleDriveEngramsModal';
 
 interface HyperTerminalProps {
   envState: EnvironmentState;
@@ -57,7 +65,9 @@ const BUILTIN_COMMANDS = [
   'tree', 'find', 'grep', 'vfs', 'render', 'sentiment', 'color', 'gravity',
   'speed', 'turbulence', 'burst', 'calm', 'shatter', 'gemini', 'ask', 'ai',
   'voice', 'speak', 'mic', 'listen', '963', 'node', 'js', 'git', 'singularity', 'satcom',
-  'swarm', 'arbitrage', 'voip', 'mcp', 'macro', 'quine', 'telemetry', 'date', 'uptime'
+  'swarm', 'arbitrage', 'voip', 'mcp', 'macro', 'quine', 'telemetry', 'date', 'uptime',
+  'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
+  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive'
 ];
 
 export const HyperTerminal: React.FC<HyperTerminalProps> = ({ envState, setEnvState }) => {
@@ -99,9 +109,12 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   // In-terminal editor state
   const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
 
-  // Modals & History State
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
+  const [linksInitialUrl, setLinksInitialUrl] = useState('file:///root/gemini.md');
+  const [isEngramsModalOpen, setIsEngramsModalOpen] = useState(false);
+  const [engramsMarkdown, setEngramsMarkdown] = useState<string>(MASTER_GEMINI_MD_DEFAULT);
   const [chromeVoxAnnounce, setChromeVoxAnnounce] = useState('');
   const [commandHistoryItems, setCommandHistoryItems] = useState<CommandHistoryItem[]>([
     {
@@ -196,6 +209,21 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
+
+  // Synchronize dynamic ambient soundscape to envState.ambientSoundscape & envState.sentiment
+  useEffect(() => {
+    if (envState.ambientSoundscape) {
+      ambientAudioService.start(envState.sentiment);
+      ambientAudioService.setVolume(envState.ambientVolume);
+      ambientAudioService.setHarmonic(envState.harmonicResonance);
+    } else {
+      ambientAudioService.stop();
+    }
+  }, [envState.ambientSoundscape, envState.ambientVolume, envState.harmonicResonance]);
+
+  useEffect(() => {
+    ambientAudioService.updateSentiment(envState.sentiment);
+  }, [envState.sentiment]);
 
   // Toggle microphone input handler
   const handleToggleMic = async () => {
@@ -343,11 +371,18 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   calm                   : Stabilize into harmonic low-entropy resonance
   shatter                : Inject chaotic high-frequency perturbation
 
+[D3 REAL-TIME DATA STREAMS]
+  d3 stream | shape      : Manage D3 background data visualizer
+  ping <host>            : Network echo with radar/force visual
+  netstat                : Display socket mesh force graph
+  curl | fetch <url>     : HTTP data stream visualizer
+  telemetry              : Dump current system/D3 state JSON
+
 [AI CONVERSATION & IN-VISUAL VOICE]
   gemini <prompt>        : Talk to AI, alter 3D visual, speak response
   ai <prompt>            : Shortcut for gemini conversation
   voice on | off         : Toggle synthesized voice responses
-  voice tune <pitch> <rate> : Configure vocal pitch (0.5-2.0) and rate
+  voice profile <name>   : Switch neural voice personas (sovereign, quantum, etc.)
   speak <text>           : Manually speak phrase with 3D projection
   963 on | off           : Toggle real 963 Hz solfeggio pure sine oscillator
 
@@ -363,11 +398,30 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   macro stop | run <name>: Save or execute macro script
   quine export           : Export 100% standalone offline running HTML
 
+[OMNI-NEXUS OS KERNEL & RECOVERY ENGINE]
+  links <url|file>       : Launch text-based browser for VFS & MHTML docs
+  ambient on | off | vol : Dynamic Web Audio sentiment-reactive soundscape
+  harmonic <432|528|963> : Solfeggio equilibrium & multi-node consensus
+  chronos beat | verify  : pseudoHash(ISO+beat) with prime 137451921129154222
+  sentinel verify|restore: Dotfiles hash check & QuinRestore auto-healing
+  ouroboros run | status : Recursive self-feeding loop for zero-human uptime
+  mhtml list | capture   : RFC 822 circular locked sandbox (0 API tokens)
+  agent verify | mdm     : NexusCommandAgent & SynapseBridge verification
+  spider harvest         : Contextual log merger via Harvestertowebomnispiders
+  stress <count>         : Skill Creatorial concurrent fault injection harness
+  mount | umount <dev>   : Plug-n-play operating system volume manager
+  engram | gdrive        : Google Drive & gemini.md memory engrams hub
+
 [TERMINAL CONTROLS]
+  history [-e]           : Open history browser or export to VFS (Ctrl+R)
   clear                  : Clear terminal viewport (Ctrl+L)
   dock <bottom|float|full> : Switch terminal docking position
   opacity <0.2-1.0>      : Adjust glass translucency
   canvas                 : Toggle pure visual canvas mode (unobstructed)
+  chromevox on | off     : Toggle ARIA screen reader protocols
+  contrast on | off      : Toggle high-contrast accessibility
+  top                    : Real-time system monitoring HUD
+  theme <cyber|matrix|aura>: Quick theme/sentiment presets
   date | uptime | whoami : System diagnostics & runtime info
 ========================================================================`,
           'system'
@@ -403,6 +457,41 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
         const mins = Math.floor((s % 3600) / 60);
         const secs = s % 60;
         appendLine(`up ${hrs}h ${mins}m ${secs}s, 1 user, load average: 0.04, 0.01, 0.00`, 'output');
+        break;
+      }
+
+      case 'top': {
+        const memTotal = 16384;
+        const memUsed = Math.floor(Math.random() * 4000 + 8000);
+        appendLine(`Tasks: 42 total, 1 running, 41 sleeping, 0 stopped, 0 zombie
+%Cpu(s):  ${(Math.random() * 5 + 2).toFixed(1)} us,  ${(Math.random() * 2 + 1).toFixed(1)} sy,  0.0 ni, 92.4 id,  0.1 wa,  0.0 hi,  0.2 si,  0.0 st
+MiB Mem :  ${memTotal}.0 total,   ${memTotal - memUsed}.0 free,   ${memUsed}.0 used,   456.0 buff/cache
+MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+ 1024 root      20   0  984210  83892  42100 R   ${(Math.random() * 4 + 1).toFixed(1)}   0.5   0:04.12 hyperterminal
+    1 root      20   0    2412   1210   1024 S   0.0   0.0   0:00.08 quine-init
+  512 root      20   0  142850  12410   8200 S   0.1   0.1   0:01.45 d3-stream-engine`, 'table');
+        break;
+      }
+
+      case 'theme': {
+        const t = (args[0] || 'cyber').toLowerCase();
+        if (t === 'cyber' || t === 'cyberpunk') {
+          processCommand('sentiment energetic');
+          processCommand('color #00f2ff #f43f5e');
+          appendLine('Theme set to [CYBERPUNK].', 'success');
+        } else if (t === 'matrix' || t === 'emerald') {
+          processCommand('sentiment tranquil');
+          processCommand('color #10b981 #059669');
+          appendLine('Theme set to [MATRIX].', 'success');
+        } else if (t === 'aura' || t === 'cosmic') {
+          processCommand('sentiment cosmic');
+          processCommand('color #a855f7 #3b82f6');
+          appendLine('Theme set to [COSMIC AURA].', 'success');
+        } else {
+          appendLine('Usage: theme <cyber|matrix|aura>', 'error');
+        }
         break;
       }
 
@@ -749,6 +838,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
                 topology: envState.topology,
                 sentiment: envState.sentiment,
               },
+              engramsContext: engramsMarkdown,
             }),
           });
 
@@ -1413,6 +1503,196 @@ x-telemetry-status: STREAM_ACTIVE
         break;
       }
 
+      case 'links': {
+        const target = args[0] || 'file:///root/gemini.md';
+        setLinksInitialUrl(target);
+        setIsLinksModalOpen(true);
+        audioVoiceService.playTone(880, 'sine', 70);
+        appendLine(`Launched Links text-based browser for: ${target}`, 'system', '🌐');
+        break;
+      }
+
+      case 'ambient': {
+        const sub = (args[0] || '').toLowerCase();
+        if (sub === 'on') {
+          setEnvState((prev) => ({ ...prev, ambientSoundscape: true }));
+          ambientAudioService.start(envState.sentiment);
+          appendLine(`Dynamic Web Audio ambient soundscape ENGAGED (Tuned to ${envState.sentiment.toUpperCase()}).`, 'success', '🎵');
+        } else if (sub === 'off') {
+          setEnvState((prev) => ({ ...prev, ambientSoundscape: false }));
+          ambientAudioService.stop();
+          appendLine('Dynamic Web Audio ambient soundscape MUTED.', 'system');
+        } else if (sub === 'vol' || sub === 'volume') {
+          const val = parseFloat(args[1] || '0.35');
+          const bounded = Math.max(0, Math.min(1, isNaN(val) ? 0.35 : val));
+          setEnvState((prev) => ({ ...prev, ambientVolume: bounded }));
+          ambientAudioService.setVolume(bounded);
+          appendLine(`Ambient soundscape volume set to ${(bounded * 100).toFixed(0)}%`, 'success');
+        } else {
+          const next = !envState.ambientSoundscape;
+          setEnvState((prev) => ({ ...prev, ambientSoundscape: next }));
+          if (next) ambientAudioService.start(envState.sentiment);
+          else ambientAudioService.stop();
+          appendLine(`Ambient soundscape ${next ? 'ACTIVATED' : 'DISABLED'}.`, next ? 'success' : 'system', '🎵');
+        }
+        break;
+      }
+
+      case 'harmonic': {
+        const mode = (args[0] || '432').toLowerCase() as '432' | '528' | '963' | 'all';
+        if (['432', '528', '963', 'all'].includes(mode)) {
+          setEnvState((prev) => ({ ...prev, harmonicResonance: mode }));
+          ambientAudioService.setHarmonic(mode);
+          const freqMap: Record<string, string> = {
+            '432': '432 Hz Foundational Equilibrium (A=432Hz baseline stability)',
+            '528': '528 Hz Transformation State (Data Ingestion & Miraculous Cadence)',
+            '963': '963 Hz Transcendent Consensus (Multi-Node Network Agreement)',
+            all: 'Triple Harmonic Resonator (432Hz + 528Hz + 963Hz Unified Consensus)',
+          };
+          audioVoiceService.playTone(mode === '432' ? 432 : mode === '528' ? 528 : 963, 'sine', 200, 0.04);
+          appendLine(`Harmonic Resonator frequency tuned to [${freqMap[mode]}].`, 'good', 'Ω');
+        } else {
+          appendLine('Usage: harmonic <432|528|963|all>', 'error');
+        }
+        break;
+      }
+
+      case 'chronos': {
+        const proof = omniNexusService.generateChronosBeat();
+        audioVoiceService.playEarcon('ping');
+        appendLine(`[CHRONOS HEARTBEAT // PSEUDOHASH CONTINUITY VERIFIED]
+Beat Index       : #${proof.beatIndex}
+ISO Timestamp    : ${proof.isoTimestamp}
+Dwell Delta      : ${proof.dwellDeltaMs} ms
+Canonical Prime  : ${proof.canonicalPrime} (18-Digit High-Integer Lock)
+State pseudoHash : ${proof.pseudoHash}
+Offline Verified : ${proof.offlineVerified ? 'YES (100% Offline State Continuity Guaranteed)' : 'FAIL'}
+Coherence        : ${proof.stateCoherence}% LOCKED`, 'table', '⏱️');
+        break;
+      }
+
+      case 'sentinel': {
+        const sub = (args[0] || 'verify').toLowerCase();
+        const res = omniNexusService.runSentinelVerification(sub === 'test-fail');
+        audioVoiceService.playEarcon(res.quinRestoreStatus === 'healthy' ? 'success' : 'switch');
+        appendLine(`[SENTINEL CRON VERIFIER // QUIN-RESTORE INTEGRITY MATRIX]
+Dotfiles Hashed  : ${res.dotfilesHashed} files (.bash_profile, .gitconfig, tokens.json)
+Golden Ledger    : ${res.goldenLedgerHash}
+Current Mesh Hash: ${res.currentMeshHash}
+Mismatches Found : ${res.mismatchesDetected}
+QuinRestore      : [${res.quinRestoreStatus.toUpperCase()}] ${res.repairedBinaries.length > 0 ? `(Auto-healed: ${res.repairedBinaries.join(', ')})` : 'Zero tampering detected'}`, 'table', '🛡️');
+        break;
+      }
+
+      case 'ouroboros': {
+        const lastLine = activeInstance.lines[activeInstance.lines.length - 1]?.text || 'initial';
+        const ouro = omniNexusService.executeOuroborosStep(lastLine);
+        audioVoiceService.playTone(660, 'triangle', 100);
+        appendLine(`[OUROBOROS PROTOCOL // INFINITE SELF-CONSUMING RUNTIME]
+Iteration Cycle  : #${ouro.iteration}
+Output Fuel Hash : ${ouro.fuelHash}
+Entropy Damping  : ${(ouro.entropyDampened * 100).toFixed(2)}%
+State            : ${ouro.nextInstruction}`, 'table', '♾️');
+        break;
+      }
+
+      case 'mhtml': {
+        const sub = (args[0] || 'list').toLowerCase();
+        if (sub === 'list') {
+          const docs = omniNexusService.getMhtmlDocs();
+          const table = docs.map((d) => `  - ${d.title} (${d.sizeBytes} B) -> mhtml:///${d.id}`).join('\n');
+          appendLine(`MHTML CIRCULAR LOCKED OFFLINE ARCHIVES (0 API Tokens Consumed):\n${table}`, 'output', '📦');
+        } else if (sub === 'capture') {
+          const url = args[1] || 'https://nexus.internal/app';
+          const doc = omniNexusService.captureMhtml(url);
+          appendLine(`Captured external web applet into RFC 822 MHTML Circular Lock:\n  URI: mhtml:///${doc.id}\n  Boundary: ${doc.rfc822Boundary}\n  Size: ${doc.sizeBytes} B (Sandbox offline execution verified with 0 tokens).`, 'success', '📦');
+        } else if (sub === 'view') {
+          const target = args[1] || 'quantum_vault.mhtml';
+          setLinksInitialUrl(`mhtml:///${target}`);
+          setIsLinksModalOpen(true);
+          appendLine(`Opened MHTML Circular Lock in Links browser: mhtml:///${target}`, 'system');
+        } else {
+          appendLine('Usage: mhtml <list|capture <url>|view <doc>>', 'error');
+        }
+        break;
+      }
+
+      case 'agent': {
+        const agentStatus = omniNexusService.verifyNexusAgent();
+        audioVoiceService.playTone(963, 'sine', 120);
+        appendLine(`[NEXUS COMMAND AGENT // SYNAPSE BRIDGE RUNTIME]
+Recovery Volume  : ${agentStatus.recoveryVolumeMounted ? `MOUNTED at ${agentStatus.recoveryVolumePath}` : 'UNMOUNTED'}
+SynapseBridge    : Port ${agentStatus.synapseBridgePort} [${agentStatus.synapseBridgeVerified ? 'SECURE_ACTIVE' : 'IDLE'}]
+MDM Enrollment   : ${agentStatus.mdmEnrolled ? 'ENROLLED' : 'UNLINKED (Zero Governor Mode)'}
+CSRUTIL Security : ${agentStatus.csrutilStatus.toUpperCase()}
+Verification Code: ${agentStatus.verificationCode}`, 'table', '🤖');
+        break;
+      }
+
+      case 'spider':
+      case 'crawler': {
+        const spiderRes = omniNexusService.harvestFragmentedLogs();
+        audioVoiceService.playEarcon('stream');
+        appendLine(`[HARVESTERTOWEBOMNISPIDERS // CONTEXTUAL LOG MERGER]
+Logs Scanned     : ${spiderRes.logsScanned} log fragments
+Fragments Merged : ${spiderRes.fragmentsMerged} streams
+Osmosis Bandwidth: ${spiderRes.osmosisBandwidthKb} KB/s
+Runtime Streams  :\n  ${spiderRes.runtimeStreamsUpdated.join('\n  ')}
+Coherence Gain   : +${(spiderRes.coherenceGainPct * 100).toFixed(2)}%`, 'table', '🕷️');
+        break;
+      }
+
+      case 'stress': {
+        const count = parseInt(args[0] || '50', 10);
+        const stress = omniNexusService.runConcurrentStressHarness(isNaN(count) ? 50 : count);
+        audioVoiceService.playTone(1100, 'sawtooth', 120);
+        appendLine(`[SKILL CREATORIAL // CONCURRENT FAULT INJECTION HARNESS]
+Transactions     : ${stress.iterations} concurrent multi-modal streams
+Execution Time   : ${stress.elapsedMs} ms (${stress.throughputPerSec} ops/sec)
+Success Nodes    : ${stress.successfulNodes}
+Intercepted Faults: ${stress.interceptedFaults} (Schema violations & security exploits quarantined)
+Captured Logs    : ${stress.capturedErrorLogs} thread-safe error records`, 'table', '⚡');
+        break;
+      }
+
+      case 'mount': {
+        if (!args[0]) {
+          appendLine(`MOUNTED OPERATING SYSTEM VOLUMES:
+${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto-attended)`).join('\n')}`, 'table');
+          break;
+        }
+        const dev = args[0];
+        const mnt = args[1] || `/mnt/${dev.replace(/[^a-z0-9]/gi, '_')}`;
+        if (!envState.mountedDevices.includes(mnt)) {
+          setEnvState((prev) => ({ ...prev, mountedDevices: [...prev.mountedDevices, mnt] }));
+        }
+        audioVoiceService.playEarcon('success');
+        appendLine(`Mounted device '${dev}' on '${mnt}' [AUTO-ATTENDED PLUG-N-PLAY OK].`, 'success', '💾');
+        break;
+      }
+
+      case 'umount': {
+        if (!args[0]) {
+          appendLine('Usage: umount <mountPoint>', 'error');
+          break;
+        }
+        setEnvState((prev) => ({
+          ...prev,
+          mountedDevices: prev.mountedDevices.filter((d) => !d.includes(args[0])),
+        }));
+        appendLine(`Unmounted volume '${args[0]}'.`, 'system');
+        break;
+      }
+
+      case 'engram':
+      case 'gdrive':
+      case 'gemini-md': {
+        setIsEngramsModalOpen(true);
+        audioVoiceService.playTone(963, 'sine', 80);
+        appendLine('Opened Google Drive & gemini.md Authoritative Memory Engrams Hub.', 'system', '🧠');
+        break;
+      }
+
       default: {
         // Check if command is executable script in /root/scripts
         try {
@@ -1454,7 +1734,38 @@ x-telemetry-status: STREAM_ACTIVE
         setSelectedSuggestionIndex(-1);
         return;
       }
-    } else if (e.key === 'Tab' || (e.key === 'ArrowRight' && inputRef.current?.selectionStart === inputVal.length)) {
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (showSuggestions && suggestions.length > 0) {
+        const targetIndex = selectedSuggestionIndex >= 0 ? selectedSuggestionIndex : 0;
+        const targetCmd = suggestions[targetIndex].command;
+        handleSelectSuggestion(targetCmd);
+        return;
+      }
+      if (ghostSuggestion) {
+        handleSelectSuggestion(ghostSuggestion);
+        return;
+      }
+      const currentFiles = (() => {
+        try {
+          return vfs.listDir(activeInstance.cwd, '.').map((f) => (f.isDir ? `${f.name}/` : f.name));
+        } catch {
+          return [];
+        }
+      })();
+      const matches = getCommandSuggestions(inputVal, 8, currentFiles);
+      if (matches.length === 1) {
+        handleSelectSuggestion(matches[0].command);
+        return;
+      } else if (matches.length > 1) {
+        setSuggestions(matches);
+        setShowSuggestions(true);
+        setSelectedSuggestionIndex(0);
+        setGhostSuggestion(matches[0].command);
+        audioVoiceService.playTone(660, 'sine', 30);
+        return;
+      }
+    } else if (e.key === 'ArrowRight' && inputRef.current?.selectionStart === inputVal.length) {
       if (showSuggestions && suggestions.length > 0) {
         e.preventDefault();
         const targetIndex = selectedSuggestionIndex >= 0 ? selectedSuggestionIndex : 0;
@@ -1734,6 +2045,48 @@ x-telemetry-status: STREAM_ACTIVE
                 <span className="hidden sm:inline">D3 STREAM</span>
               </button>
 
+              {/* Dynamic Sentiment Ambient Soundscape */}
+              <button
+                onClick={() => {
+                  const next = !envState.ambientSoundscape;
+                  setEnvState((prev) => ({ ...prev, ambientSoundscape: next }));
+                  if (next) ambientAudioService.start(envState.sentiment);
+                  else ambientAudioService.stop();
+                }}
+                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                  envState.ambientSoundscape
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.35)]'
+                    : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title="Toggle Web Audio Dynamic Ambient Soundscape (Reacts to Sentiment & Solfeggio)"
+              >
+                <Music className="w-3 h-3 text-purple-400" />
+                <span className="hidden lg:inline">{envState.ambientSoundscape ? `AMBIENT: ${envState.sentiment.toUpperCase()}` : 'AMBIENT'}</span>
+              </button>
+
+              {/* Links Text Browser Modal Trigger */}
+              <button
+                onClick={() => {
+                  setLinksInitialUrl('file:///root/gemini.md');
+                  setIsLinksModalOpen(true);
+                }}
+                className="px-2 py-1 rounded-md bg-black/40 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                title="Open Links Text-Based Browser (links / lynx)"
+              >
+                <BookOpen className="w-3 h-3 text-cyan-400" />
+                <span className="hidden sm:inline">LINKS</span>
+              </button>
+
+              {/* Google Drive & Memory Engrams Modal Trigger */}
+              <button
+                onClick={() => setIsEngramsModalOpen(true)}
+                className="px-2 py-1 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                title="Open Google Drive & gemini.md Memory Engrams Hub"
+              >
+                <Cloud className="w-3 h-3 text-purple-400" />
+                <span className="hidden md:inline">G-DRIVE</span>
+              </button>
+
               {/* Neural Voice Profile Selector Modal */}
               <button
                 onClick={() => setIsVoiceModalOpen(true)}
@@ -1899,15 +2252,16 @@ x-telemetry-status: STREAM_ACTIVE
             <span className="text-slate-500 font-bold shrink-0">QUICK:</span>
             {[
               'help',
-              'ls -la',
-              'mic on',
-              'listen',
+              'links file:///root/gemini.md',
+              'ambient on',
+              'chronos beat',
+              'sentinel verify',
               'render tesseract',
               'render singularity',
+              'harmonic 432',
               'gemini explain quantum coherence',
               'satcom ping',
               'singularity evolve',
-              '963 on',
               'quine export',
               'calm',
             ].map((quick) => (
@@ -2048,6 +2402,24 @@ x-telemetry-status: STREAM_ACTIVE
         onToggleChromeVox={(enabled) => setEnvState((prev) => ({ ...prev, chromeVoxEnabled: enabled }))}
         highContrast={envState.highContrast}
         onToggleHighContrast={(enabled) => setEnvState((prev) => ({ ...prev, highContrast: enabled }))}
+      />
+
+      {/* Links Text-Based Web & VFS Browser Modal */}
+      <LinksBrowserModal
+        isOpen={isLinksModalOpen}
+        onClose={() => setIsLinksModalOpen(false)}
+        initialUrl={linksInitialUrl}
+      />
+
+      {/* Google Drive & gemini.md Authoritative Memory Engrams Modal */}
+      <GoogleDriveEngramsModal
+        isOpen={isEngramsModalOpen}
+        onClose={() => setIsEngramsModalOpen(false)}
+        onInjectEngramToPrompt={(text) => {
+          setInputVal(text);
+          inputRef.current?.focus();
+        }}
+        onEngramsUpdated={(txt) => setEngramsMarkdown(txt)}
       />
 
       {/* ChromeVox Screen Reader ARIA Live Announcer Region */}

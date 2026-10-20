@@ -966,7 +966,7 @@ export const DeviceControlModal: React.FC<DeviceControlModalProps> = ({
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
                   <span className="text-[11px] font-bold text-slate-400">Recent ChromeVox Broadcasts:</span>
                   <div className="space-y-1 max-h-28 overflow-y-auto text-[10.5px] text-slate-300 font-mono">
-                    {a11yState.announcementHistory.slice(-5).map((log, i) => (
+                    {a11yState.announcementHistory.slice(-5).map((log: string, i: number) => (
                       <div key={i} className="text-cyan-200/90 truncate">
                         {log}
                       </div>

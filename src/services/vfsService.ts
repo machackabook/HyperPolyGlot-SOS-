@@ -45,6 +45,40 @@ Type 'help' to inspect all commands, or try:
 - **Self-Replicating Quine**: The system can compile and download its own source code as a standalone zero-dependency HTML quine.`,
           metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 950 },
         },
+        'gemini.md': {
+          type: 'file',
+          content: `# GEMINI.MD // OMNI-NEXUS & SCRIBE MASTER ARCHITECTURAL MEMORY ENGRAMS
+Version: 2.0-SOVEREIGN // Tier 5 Maximum Nexus Core
+Canonical High-Integer Prime Anchor: 137451921129154222
+Owner Account: machackabook@gmail.com
+Status: 100% OPERATIONAL & VERIFIED
+
+## 1. OMNI-NEXUS ARCHITECTURE SUMMARY
+- Epoch 1 (Fragmented Edge): Termux A15, Lenovo Chromebook, Dell Optiplex.
+- Chronos Heartbeat: pseudoHash(ISO+beat) capturing elapsed time and dwell deltas.
+- Epoch 2 (Synergy & Bridging): Sentinel Cron Verifier hashing dotfiles (.bash_profile, .gitconfig) against Genesis ledger (0x9E7F4A2C81B045D378291F6C). QuinRestore auto-restores corrupt binaries.
+- Ouroboros Protocol: Recursive output-to-input loop guaranteeing perpetual system uptime.
+- Epoch 3 (Unified Monolith): MHTML circular locking (RFC 822) offline execution sandbox (0 tokens consumed).
+- Four-Strata Architecture: Stratum 0 Ambient 2D, Stratum 1 3D Spatial, Stratum 2 Sandboxed iframes, Stratum 3 Live telemetry HUD.
+- Harvestertowebomnispiders: Automated crawler merging fragmented logs via contextual osmosis.
+- Harmonic Resonator Model: 432 Hz Equilibrium, 528 Hz Transformation, 963 Hz Transcendent Consensus.
+
+## 2. THE SCRIBE OF NEXUS (V2.0)
+- Multi-key failover manager: macmachackabook, cryptichelps, saytyarnorngloreia.
+- NexusCommandAgent: Recovery environment verification via SynapseBridge on port 5150 with recovery volume mounting.
+- Skill Creatorial: Decoupled API Gateway, declarative skill factory, token-window rate limiter, concurrent fault injection harness.`,
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 1650 },
+        },
+        '.bash_profile': {
+          type: 'file',
+          content: `# Nexus Sovereign Profile\nexport OS="HyperTerminal"\nexport HARMONIC="432"\nexport PRIME="137451921129154222"\n`,
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 120 },
+        },
+        '.gitconfig': {
+          type: 'file',
+          content: `[user]\n  name = Sovereign Operator\n  email = machackabook@gmail.com\n[core]\n  primeAnchor = 137451921129154222\n`,
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 140 },
+        },
         projects: {
           type: 'directory',
           metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 4096 },

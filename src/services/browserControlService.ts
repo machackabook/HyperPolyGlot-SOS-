@@ -96,7 +96,7 @@ export class BrowserControlService {
       const rawResult = await fn(...Object.values(sandboxContext));
       const executionTimeMs = parseFloat((performance.now() - startTime).toFixed(2));
 
-      let resultType = typeof rawResult;
+      let resultType: string = typeof rawResult;
       let displayResult = rawResult;
 
       if (rawResult === undefined) {

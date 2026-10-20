@@ -29,6 +29,10 @@ export function App() {
     terminalDock: 'bottom',
     highContrast: false,
     chromeVoxEnabled: false,
+    ambientSoundscape: false,
+    ambientVolume: 0.35,
+    harmonicResonance: '432',
+    mountedDevices: ['/mnt/nexus_drive', '/mnt/recovery', '/mnt/httpdfs'],
     d3Stream: {
       active: false,
       shape: 'force',

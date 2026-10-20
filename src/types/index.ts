@@ -74,6 +74,49 @@ export interface EnvironmentState {
   highContrast: boolean;
   chromeVoxEnabled: boolean;
   d3Stream: D3StreamConfig;
+  ambientSoundscape: boolean;
+  ambientVolume: number;
+  harmonicResonance: '432' | '528' | '963' | 'all';
+  mountedDevices: string[];
+}
+
+export interface LinksBrowserPage {
+  url: string;
+  title: string;
+  content: string;
+  protocol: 'file' | 'mhtml' | 'https' | 'nexus';
+  links: { text: string; target: string; index: number }[];
+}
+
+export interface EngramMemory {
+  id: string;
+  title: string;
+  epoch: string;
+  tags: string[];
+  excerpt: string;
+  fullMarkdown: string;
+  primeAnchor: string;
+  syncedToGdrive: boolean;
+  lastUpdated: string;
+}
+
+export interface ChronosHeartbeatProof {
+  beatIndex: number;
+  isoTimestamp: string;
+  dwellDeltaMs: number;
+  pseudoHash: string;
+  canonicalPrime: string;
+  stateCoherence: number;
+  offlineVerified: boolean;
+}
+
+export interface SentinelVerificationResult {
+  dotfilesHashed: number;
+  goldenLedgerHash: string;
+  currentMeshHash: string;
+  mismatchesDetected: number;
+  quinRestoreStatus: 'healthy' | 'repaired' | 'quarantined';
+  repairedBinaries: string[];
 }
 
 export interface VfsFileMetadata {
@@ -138,4 +181,98 @@ export interface CommandContext {
   clearTerminal: () => void;
   speakText: (text: string) => void;
   playTone: (freq?: number, type?: OscillatorType, durationMs?: number) => void;
+}
+
+export type DevicePermissionStatus = 'granted' | 'denied' | 'prompt' | 'unsupported';
+
+export interface DeviceCapabilityTelemetry {
+  permissions: {
+    microphone: DevicePermissionStatus;
+    clipboardRead: DevicePermissionStatus;
+    clipboardWrite: DevicePermissionStatus;
+    notifications: DevicePermissionStatus;
+    geolocation: DevicePermissionStatus;
+    screenWakeLock: DevicePermissionStatus;
+  };
+  battery: {
+    level: number;
+    charging: boolean;
+    chargingTime: number;
+    dischargingTime: number;
+  } | null;
+  network: {
+    online: boolean;
+    effectiveType?: string;
+    downlink?: number;
+    rtt?: number;
+    saveData?: boolean;
+  };
+  hardware: {
+    logicalCores: number;
+    touchPoints: number;
+    memoryGB?: number;
+    deviceMemoryGb?: number;
+  };
+  wakeLockActive: boolean;
+  onDeviceAI: {
+    supported: boolean;
+    status: string;
+    modelAvailable?: boolean;
+  };
+  screen: {
+    width: number;
+    height: number;
+    availWidth: number;
+    availHeight: number;
+    pixelRatio: number;
+    colorDepth: number;
+    orientation: string;
+    fullscreen: boolean;
+  };
+}
+
+export interface TextFragmentMatch {
+  id: string;
+  text: string;
+  fragmentUrl: string;
+  index?: number;
+  occurrenceIndex?: number;
+  totalOccurrences?: number;
+  fullSnippet?: string;
+  targetSelector?: string;
+  element?: HTMLElement;
+  boundingRect?: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
+}
+
+export interface BrowserExecutionResult {
+  id: string;
+  code: string;
+  result: any;
+  resultType: string;
+  executionTimeMs: number;
+  timestamp: string;
+  error?: string;
+}
+
+export interface A11yNavigationState {
+  focusedElementSelector: string;
+  focusedRole: string;
+  focusedAriaLabel: string;
+  focusedText: string;
+  lastAnnouncement: string;
+  announcementHistory: string[];
+  totalTraversableElements: number;
+  currentElementIndex: number;
+}
+
+export interface DeviceAssistAction {
+  action: 'highlight_fragment' | 'wakelock' | 'notify' | 'screen_reader' | 'vibrate' | 'clipboard' | 'browser_exec' | 'none';
+  param?: string;
+  description: string;
+  status: 'success' | 'failed' | 'unsupported';
 }
