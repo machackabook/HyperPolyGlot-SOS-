@@ -1,17 +1,38 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { EnvironmentState } from '../types';
+import { EnvironmentState, VfsNode } from '../types';
 import { audioVoiceService } from '../services/audioVoiceService';
+import { vfs } from '../services/vfsService';
+import { navigatorService } from '../services/navigatorService';
 
 interface VisualRenderer3DProps {
   envState: EnvironmentState;
   onSceneClick?: () => void;
 }
 
+interface VfsStarNode {
+  mesh: THREE.Mesh;
+  label: string;
+  path: string;
+  type: 'file' | 'directory';
+  data: any;
+  velocity: THREE.Vector3;
+  originalPos: THREE.Vector3;
+}
+
 export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, onSceneClick }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const envRef = useRef<EnvironmentState>(envState);
+  const telemetryHistory = useRef<{
+    packets: number[];
+    throughput: number[];
+    jitter: number[];
+  }>({
+    packets: new Array(60).fill(0),
+    throughput: new Array(60).fill(0),
+    jitter: new Array(60).fill(0)
+  });
 
   // Keep envRef updated so render loop accesses the latest values without recreation
   useEffect(() => {
@@ -205,6 +226,83 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     dnaGroup.add(dnaMesh);
     topologiesGroup.add(dnaGroup);
 
+    // Topology G: Filesystem Galaxy (VFS)
+    const galaxyVfsGroup = new THREE.Group();
+    const vfsNodes: VfsStarNode[] = [];
+    scene.add(galaxyVfsGroup);
+
+    function buildFilesystemGalaxy() {
+      // Clear existing
+      while (galaxyVfsGroup.children.length > 0) {
+        const child = galaxyVfsGroup.children[0];
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+        galaxyVfsGroup.remove(child);
+      }
+      vfsNodes.length = 0;
+
+      const flatNodes: { name: string; node: VfsNode; path: string; depth: number }[] = [];
+      const recurse = (curr: VfsNode, path: string, depth: number) => {
+        if (!curr.children) return;
+        Object.entries(curr.children).forEach(([name, child]) => {
+          const fullPath = path === '/' ? `/${name}` : `${path}/${name}`;
+          flatNodes.push({ name, node: child, path: fullPath, depth });
+          if (child.type === 'directory') recurse(child, fullPath, depth + 1);
+        });
+      };
+      recurse(vfs.getNode('/', '/').node!, '/', 0);
+
+      // Layout in a spiral galaxy formation
+      flatNodes.forEach((item, idx) => {
+        const phi = Math.acos(-1 + (2 * idx) / flatNodes.length);
+        const theta = Math.sqrt(flatNodes.length * Math.PI) * phi;
+        
+        // Cluster logic: distance from center based on depth + some randomness
+        const spiralFactor = idx * 0.15;
+        const radius = 25 + item.depth * 50 + Math.random() * 20 + spiralFactor;
+        const x = radius * Math.sin(phi) * Math.cos(theta);
+        const y = radius * Math.sin(phi) * Math.sin(theta);
+        const z = radius * Math.cos(phi);
+
+        const isDir = item.node.type === 'directory';
+        const geo = isDir 
+          ? new THREE.IcosahedronGeometry(3, 1) 
+          : new THREE.BoxGeometry(2, 2, 2);
+        
+        const color = isDir ? 0xa855f7 : 0x00f2ff;
+        const mat = new THREE.MeshPhongMaterial({
+          color,
+          emissive: color,
+          emissiveIntensity: 0.5,
+          transparent: true,
+          opacity: 0.8,
+          shininess: 100,
+        });
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        galaxyVfsGroup.add(mesh);
+
+        vfsNodes.push({
+          mesh,
+          label: item.name,
+          path: item.path,
+          type: item.node.type,
+          data: item.node,
+          velocity: new THREE.Vector3((Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.1),
+          originalPos: mesh.position.clone(),
+        });
+      });
+    }
+
+    buildFilesystemGalaxy();
+
     // 4. 4,000 Interactive Vector Flow Particles
     const PARTICLE_COUNT = 4000;
     const pGeo = new THREE.BufferGeometry();
@@ -307,6 +405,15 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     let mouseY = 0;
     let targetRotY = 0;
     let targetRotX = 0;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let hoveredNodeId: string | null = null;
+
+    const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    const onKeyDown = (e: KeyboardEvent) => { if (keys.hasOwnProperty(e.key)) (keys as any)[e.key] = true; };
+    const onKeyUp = (e: KeyboardEvent) => { if (keys.hasOwnProperty(e.key)) (keys as any)[e.key] = false; };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     const onPointerMove = (e: MouseEvent) => {
       const nx = (e.clientX - width / 2) / (width / 2);
@@ -315,6 +422,10 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       mouseY = ny;
       targetRotY = nx * 0.45;
       targetRotX = ny * 0.35;
+
+      // Update mouse for raycasting
+      mouse.x = (e.clientX / width) * 2 - 1;
+      mouse.y = -(e.clientY / height) * 2 + 1;
     };
     window.addEventListener('mousemove', onPointerMove);
 
@@ -369,6 +480,76 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       neuralGroup.visible = currentEnv.topology === 'neural';
       galaxyGroup.visible = currentEnv.topology === 'galaxy';
       dnaGroup.visible = currentEnv.topology === 'dna';
+      galaxyVfsGroup.visible = currentEnv.topology === 'galaxy_vfs';
+
+      // Camera Movement for Galaxy VFS
+      if (currentEnv.topology === 'galaxy_vfs') {
+        const moveSpeed = 1.2 * currentEnv.speed;
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        
+        if (keys.w || keys.ArrowUp) camera.position.addScaledVector(dir, moveSpeed);
+        if (keys.s || keys.ArrowDown) camera.position.addScaledVector(dir, -moveSpeed);
+        
+        const side = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+        if (keys.a || keys.ArrowLeft) camera.position.addScaledVector(side, moveSpeed);
+        if (keys.d || keys.ArrowRight) camera.position.addScaledVector(side, -moveSpeed);
+
+        // Keep camera from going too far or sinking into nothingness
+        const dist = camera.position.length();
+        if (dist > 1500) camera.position.setLength(1500);
+
+        // Raycasting for hover detection
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(galaxyVfsGroup.children);
+        if (intersects.length > 0) {
+          const hoveredMesh = intersects[0].object as THREE.Mesh;
+          const node = vfsNodes.find(n => n.mesh === hoveredMesh);
+          hoveredNodeId = node ? node.path : null;
+        } else {
+          hoveredNodeId = null;
+        }
+
+        // Individual node animations
+        let closestNode: VfsStarNode | null = null;
+        let minDistance = Infinity;
+
+        vfsNodes.forEach((n) => {
+          n.mesh.rotation.x += n.velocity.x;
+          n.mesh.rotation.y += n.velocity.y;
+          
+          const pulse = 1 + Math.sin(t * 2 + n.originalPos.x) * 0.1 + smoothedAudio * 0.2;
+          n.mesh.scale.setScalar(pulse);
+
+          const d = n.mesh.position.distanceTo(camera.position);
+          if (d < minDistance) {
+            minDistance = d;
+            closestNode = n;
+          }
+
+          // Highlight hovered node
+          if (n.path === hoveredNodeId) {
+            (n.mesh.material as THREE.MeshPhongMaterial).emissiveIntensity = 1.5;
+          } else {
+            (n.mesh.material as THREE.MeshPhongMaterial).emissiveIntensity = 0.5;
+          }
+        });
+
+        // Trigger Gemini Navigator if close enough to a node
+        if (closestNode && minDistance < 50) {
+          navigatorService.navigateToNode(
+            (closestNode as VfsStarNode).label,
+            (closestNode as VfsStarNode).path,
+            (closestNode as VfsStarNode).type,
+            (closestNode as VfsStarNode).data.content
+          );
+        }
+      } else {
+        // Reset camera if not in VFS mode
+        const targetPos = new THREE.Vector3(0, 0, 140);
+        camera.position.lerp(targetPos, 0.02);
+        camera.lookAt(0, 0, 0);
+      }
 
       // Primary color update for active material
       const targetCol = new THREE.Color(currentEnv.primaryColor);
@@ -428,6 +609,9 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       } else if (currentEnv.topology === 'dna') {
         dnaMat.color.lerp(targetCol, 0.08);
         dnaGroup.rotation.y = t * 0.8;
+      } else if (currentEnv.topology === 'galaxy_vfs') {
+        // Master rotation of the galaxy
+        galaxyVfsGroup.rotation.y = t * 0.05;
       }
 
       // Animate Particles with Gravity & Audio reactivity
@@ -463,8 +647,21 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       speechPlane.position.y = 54 + Math.sin(t * 1.5) * 3;
       speechPlane.rotation.y = Math.sin(t * 0.8) * 0.08;
 
+      // Update Telemetry History (Sample every frame for smoothness)
+      if (currentEnv.d3Stream.active) {
+        const hist = telemetryHistory.current;
+        // Shift and push new values with slight aesthetic jitter
+        const pkts = currentEnv.d3Stream.packetRate + (Math.random() - 0.5) * 40;
+        const tp = currentEnv.d3Stream.throughputMbps + (Math.random() - 0.5) * 10;
+        const jt = currentEnv.d3Stream.jitterMs + (Math.random() - 0.5) * 0.1;
+
+        hist.packets.shift(); hist.packets.push(pkts);
+        hist.throughput.shift(); hist.throughput.push(tp);
+        hist.jitter.shift(); hist.jitter.push(jt);
+      }
+
       // Render 2D Stratum 0 HUD Overlay
-      renderHudCanvas(now, currentEnv, audioBytes);
+      renderHudCanvas(now, currentEnv, audioBytes, camera, vfsNodes, hoveredNodeId);
 
       renderer.render(scene, camera);
     };
@@ -474,6 +671,8 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
       torusGeo.dispose();
@@ -490,7 +689,14 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
   }, []);
 
   // 2D Canvas Holographic Radar & Audio Spectrum HUD (Stratum 0)
-  const renderHudCanvas = (now: number, env: EnvironmentState, audioBytes: Uint8Array | null) => {
+  const renderHudCanvas = (
+    now: number, 
+    env: EnvironmentState, 
+    audioBytes: Uint8Array | null, 
+    camera: THREE.Camera,
+    vfsNodes: VfsStarNode[],
+    hoveredNodeId: string | null
+  ) => {
     const canvas = hudCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -508,6 +714,53 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     const cx = w / 2;
     const cy = h / 2;
 
+    // VFS Node Labels (Project 3D to 2D)
+    if (env.topology === 'galaxy_vfs') {
+      ctx.textAlign = 'center';
+      vfsNodes.forEach((node) => {
+        const isHovered = node.path === hoveredNodeId;
+        const vector = node.mesh.position.clone();
+        vector.project(camera);
+
+        const x = (vector.x + 1) * w / 2;
+        const y = -(vector.y - 1) * h / 2;
+
+        const dist = node.mesh.position.distanceTo(camera.position);
+        
+        // Show label if within proximity OR hovered
+        if (vector.z < 1.0 && (dist < 300 || isHovered)) {
+          const proximityOpacity = Math.max(0, 1 - dist / 300);
+          const opacity = isHovered ? 1.0 : proximityOpacity;
+          
+          if (opacity > 0.05) {
+            const hexOpacity = Math.floor(opacity * 255).toString(16).padStart(2, '0');
+            
+            // Hover highlight effect
+            if (isHovered) {
+              ctx.shadowBlur = 10;
+              ctx.shadowColor = env.primaryColor;
+            } else {
+              ctx.shadowBlur = 0;
+            }
+
+            ctx.fillStyle = `${node.type === 'directory' ? env.secondaryColor : '#ffffff'}${hexOpacity}`;
+            const fontSize = isHovered ? 18 : Math.max(10, 16 - dist / 30);
+            ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+            ctx.fillText(node.label.toUpperCase(), x, y - 10);
+            
+            // Show full path on proximity or hover
+            if (dist < 80 || isHovered) {
+              ctx.font = '10px "JetBrains Mono", monospace';
+              ctx.fillStyle = `${env.primaryColor}${Math.floor(opacity * 180).toString(16).padStart(2, '0')}`;
+              ctx.fillText(node.path, x, y + 10);
+            }
+            
+            ctx.shadowBlur = 0;
+          }
+        }
+      });
+    }
+
     // Outer cybernetic radar rings
     ctx.strokeStyle = `${env.primaryColor}22`;
     ctx.lineWidth = 1;
@@ -519,6 +772,65 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     ctx.beginPath();
     ctx.arc(cx, cy, Math.min(w, h) * 0.28, 0, Math.PI * 2);
     ctx.stroke();
+
+    // Telemetry Oscilloscope HUD (Bottom Left)
+    if (env.d3Stream.active) {
+      const hist = telemetryHistory.current;
+      const boxW = 200;
+      const boxH = 120;
+      const bx = 24;
+      const by = h - boxH - 70; // Positioned above the audio wave
+
+      // Backdrop
+      ctx.fillStyle = 'rgba(3, 8, 20, 0.85)';
+      ctx.strokeStyle = `${env.primaryColor}55`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, boxW, boxH, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      // Grid lines inside scope
+      ctx.strokeStyle = `${env.primaryColor}11`;
+      ctx.beginPath();
+      for (let i = 1; i < 4; i++) {
+        const gy = by + (boxH / 4) * i;
+        ctx.moveTo(bx + 5, gy);
+        ctx.lineTo(bx + boxW - 5, gy);
+      }
+      ctx.stroke();
+
+      // Title & Live Metrics
+      ctx.font = 'bold 9px "Orbitron", sans-serif';
+      ctx.fillStyle = env.primaryColor;
+      ctx.textAlign = 'left';
+      ctx.fillText('LIVE TELEMETRY STREAM', bx + 12, by + 18);
+
+      const drawScope = (data: number[], color: string, label: string, yOffset: number, maxVal: number, unit: string) => {
+        const latest = data[data.length - 1];
+        ctx.font = '8px "JetBrains Mono", monospace';
+        ctx.fillStyle = `${color}cc`;
+        ctx.fillText(`${label}: ${latest.toFixed(latest < 10 ? 2 : 0)}${unit}`, bx + 12, by + yOffset);
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const step = (boxW - 24) / (data.length - 1);
+        data.forEach((val, i) => {
+          const x = bx + 12 + i * step;
+          const norm = Math.min(1, val / maxVal);
+          const y = (by + boxH - 15) - norm * 60; // Scaled to fit in bottom half of box
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      };
+
+      // Draw layered waves
+      drawScope(hist.packets, env.primaryColor, 'PKTS', 32, 5000, '/s');
+      drawScope(hist.throughput, env.secondaryColor, 'TRPT', 44, 1000, 'MB');
+      drawScope(hist.jitter, '#fbbf24', 'JITR', 56, 5, 'ms');
+    }
 
     // Live Audio Spectrum Oscilloscope Wave at bottom
     if (audioBytes && audioBytes.length > 0) {

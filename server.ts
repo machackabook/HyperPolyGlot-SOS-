@@ -61,8 +61,8 @@ Your task is to:
 1. Provide a knowledgeable, precise, cool, and technical terminal response (with helpful examples or shell commands when relevant).
 2. Analyze the sentiment and context of the user's message and the conversation.
 3. Dynamically alter the 3D visual background environment by providing exact parameters:
-   - topology: one of "torus", "tesseract", "singularity", "neural", "galaxy", "spindle", "dna"
-   - sentiment: one of "analytical", "energetic", "alarm", "tranquil", "cosmic", "chaos"
+   - topology: one of "torus", "tesseract", "singularity", "neural", "galaxy", "spindle", "dna", "galaxy_vfs"
+   - sentiment: one of "analytical", "energetic", "alarm", "tranquil", "cosmic", "chaos", "creative"
    - primaryColor: a glowing hex color (e.g. #00f2ff, #ff003c, #ffd700, #10b981, #a855f7)
    - secondaryColor: an accent hex color
    - speed: float 0.2 to 3.0 (rotation/wave speed)
@@ -99,11 +99,11 @@ Your task is to:
                 },
                 sentiment: {
                   type: Type.STRING,
-                  description: 'Detected sentiment: analytical, energetic, alarm, tranquil, cosmic, chaos.',
+                  description: 'Detected sentiment: analytical, energetic, alarm, tranquil, cosmic, chaos, creative.',
                 },
                 topology: {
                   type: Type.STRING,
-                  description: '3D background topology: torus, tesseract, singularity, neural, galaxy, spindle, dna.',
+                  description: '3D background topology: torus, tesseract, singularity, neural, galaxy, spindle, dna, galaxy_vfs.',
                 },
                 primaryColor: {
                   type: Type.STRING,
@@ -202,6 +202,17 @@ Your task is to:
       floatingGlyph = 'ψ';
       reply = `[POLYMORPHIC NEURALITY] Synaptic axon mesh firing across 4,000 live vortex nodes. Dynamic thought vectors synthesized and projected onto background visual.`;
       speechText = 'Synaptic axon mesh activated. Dynamic thought vectors projected.';
+    } else if (lower.includes('creative') || lower.includes('art') || lower.includes('paint') || lower.includes('design') || lower.includes('dream')) {
+      sentiment = 'creative';
+      topology = 'spindle';
+      primaryColor = '#a855f7';
+      secondaryColor = '#ff00ff';
+      speed = 1.4;
+      gravity = 1.0;
+      turbulence = 1.2;
+      floatingGlyph = '✎';
+      reply = `[CREATIVE ENGINE] Aesthetic mode engaged. Shifting color space to Warm Purples and Magentas. Topology projection: Quantum Spindle.`;
+      speechText = 'Creative engine active. Shifting chromatic spectrum and modulating topology.';
     } else if (lower.includes('tesseract') || lower.includes('4d') || lower.includes('hypercube') || lower.includes('dimension')) {
       sentiment = 'analytical';
       topology = 'tesseract';
@@ -238,6 +249,63 @@ Your task is to:
       gravity,
       turbulence,
       floatingGlyph,
+    });
+  });
+
+  // API endpoint: /api/navigator
+  // Provides contextual AI voice descriptions for VFS nodes as the user traverses the data orbital mesh
+  app.post('/api/navigator', async (req, res) => {
+    const { nodeName, nodePath, nodeType, contentSnippet = '' } = req.body;
+
+    if (!nodeName || !nodePath) {
+      return res.status(400).json({ error: 'Missing node telemetry' });
+    }
+
+    if (ai) {
+      try {
+        const systemInstruction = `You are the Data Orbital Navigator for HyperTerminal OS.
+Your role is to provide short, cool, and technical voice-over feedback for specific nodes in the filesystem galaxy.
+Keep descriptions under 15 words. Sound like a futuristic AI navigator.`;
+
+        const prompt = `Node Name: ${nodeName}
+Path: ${nodePath}
+Type: ${nodeType}
+Snippet: ${contentSnippet.slice(0, 500)}
+
+Provide a navigation data-burst description.`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                description: { type: Type.STRING, description: 'Futuristic technical description of the node.' },
+                urgency: { type: Type.STRING, enum: ['low', 'medium', 'high'] }
+              },
+              required: ['description']
+            }
+          }
+        });
+
+        const parsed = JSON.parse(response.text || '{}');
+        return res.json({
+          source: 'gemini-navigator',
+          ...parsed
+        });
+      } catch (err: any) {
+        console.error('Navigator Gemini error:', err?.message);
+      }
+    }
+
+    // Fallback
+    return res.json({
+      source: 'local-navigator-fallback',
+      description: `Intercepting ${nodeType} node at ${nodeName}. Data resonance stable.`,
+      urgency: 'low'
     });
   });
 

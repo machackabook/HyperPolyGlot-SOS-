@@ -23,6 +23,7 @@ interface D3DataStreamVisualizerProps {
   onConfigChange: (updated: Partial<D3StreamConfig>) => void;
   primaryColor?: string;
   secondaryColor?: string;
+  sentiment?: string;
   className?: string;
 }
 
@@ -31,6 +32,7 @@ interface SimNode extends d3.SimulationNodeDatum {
   group: number;
   radius: number;
   label: string;
+  path: string;
   ping: number;
 }
 
@@ -52,6 +54,7 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
   onConfigChange,
   primaryColor = '#00f2ff',
   secondaryColor = '#a855f7',
+  sentiment = 'analytical',
   className = '',
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -121,41 +124,59 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
     let animationFrameId: number;
 
     // =========================================================================
-    // 1. FORCE DIRECTED NETWORK TOPOLOGY
+    // 1. CLUSTERED FORCE DIRECTED NETWORK TOPOLOGY
     // =========================================================================
     if (config.shape === 'force') {
-      const nodeCount = Math.min(48, Math.max(16, config.nodeCount));
-      const nodes: SimNode[] = Array.from({ length: nodeCount }, (_, i) => ({
-        id: `node-${i}`,
-        group: i % 4,
-        radius: i === 0 ? 14 : Math.random() * 5 + 4,
-        label: i === 0 ? 'GATEWAY-0' : `EDGE-${i}`,
-        ping: Math.floor(Math.random() * 25 + 8),
-      }));
+      const nodeCount = Math.min(60, Math.max(16, config.nodeCount));
+      const clusterCount = 5;
+      const clusters = [
+        { id: 'core', path: '/sys/kernel', color: paletteColors.primary },
+        { id: 'vfs', path: '/usr/local/bin', color: paletteColors.secondary },
+        { id: 'ai', path: '/etc/neural', color: paletteColors.accent },
+        { id: 'sat', path: '/dev/satcom', color: '#f43f5e' },
+        { id: 'mem', path: '/var/memory', color: '#fbbf24' },
+      ];
+
+      const nodes: SimNode[] = Array.from({ length: nodeCount }, (_, i) => {
+        const clusterIdx = i % clusterCount;
+        const cluster = clusters[clusterIdx];
+        const isGateway = i < clusterCount;
+        return {
+          id: `node-${i}`,
+          group: clusterIdx,
+          radius: isGateway ? 12 : Math.random() * 5 + 3,
+          label: isGateway ? `${cluster.id.toUpperCase()}-GWAY` : `NODE-${i}`,
+          path: cluster.path,
+          ping: Math.floor(Math.random() * 25 + 8),
+        };
+      });
 
       const links: SimLink[] = [];
-      for (let i = 1; i < nodeCount; i++) {
-        // Connect to hub or neighbor
-        links.push({
-          source: nodes[i].id,
-          target: nodes[Math.floor(Math.random() * i)].id,
-          value: Math.random() * 4 + 1,
-        });
-        if (Math.random() > 0.65 && i > 2) {
-          links.push({
-            source: nodes[i].id,
-            target: nodes[Math.floor(Math.random() * nodeCount)].id,
-            value: Math.random() * 2 + 1,
-          });
+      nodes.forEach((node, i) => {
+        if (i < clusterCount) {
+          // Connect gateways to the central hub (node 0)
+          if (i > 0) {
+            links.push({ source: nodes[i].id, target: nodes[0].id, value: 3 });
+          }
+        } else {
+          // Connect nodes to their cluster gateway
+          const clusterGateway = nodes[node.group];
+          links.push({ source: node.id, target: clusterGateway.id, value: 2 });
+          
+          // Random cross-cluster dependencies
+          if (Math.random() > 0.85) {
+            const randomOther = nodes[Math.floor(Math.random() * nodeCount)];
+            links.push({ source: node.id, target: randomOther.id, value: 1 });
+          }
         }
-      }
+      });
 
       const g = svg.append('g').attr('class', 'force-container');
 
       const link = g
         .append('g')
         .attr('stroke', paletteColors.primary)
-        .attr('stroke-opacity', 0.3)
+        .attr('stroke-opacity', 0.25)
         .selectAll('line')
         .data(links)
         .join('line')
@@ -174,9 +195,9 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
       nodeG
         .append('circle')
         .attr('r', (d) => d.radius * 1.8)
-        .attr('fill', (d) => (d.group === 0 ? paletteColors.primary : paletteColors.secondary))
-        .attr('fill-opacity', 0.12)
-        .attr('stroke', (d) => (d.group === 0 ? paletteColors.primary : paletteColors.accent))
+        .attr('fill', (d) => clusters[d.group].color)
+        .attr('fill-opacity', 0.15)
+        .attr('stroke', (d) => clusters[d.group].color)
         .attr('stroke-width', 0.8)
         .attr('filter', 'url(#d3-glow)');
 
@@ -184,32 +205,32 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
       nodeG
         .append('circle')
         .attr('r', (d) => d.radius)
-        .attr('fill', (d) => (d.group === 0 ? '#ffffff' : paletteColors.primary))
+        .attr('fill', (d) => (d.radius > 10 ? '#ffffff' : clusters[d.group].color))
         .attr('stroke', '#ffffff')
         .attr('stroke-width', 1.2);
 
       // Node labels
       nodeG
         .append('text')
-        .text((d) => (d.radius > 6 ? d.label : ''))
+        .text((d) => (d.radius > 8 ? d.label : ''))
         .attr('x', (d) => d.radius + 5)
         .attr('y', 3)
         .attr('fill', '#94a3b8')
         .attr('font-size', '9px')
         .attr('font-family', 'monospace')
-        .attr('opacity', 0.7);
+        .attr('opacity', 0.8);
 
       // Moving packet dots
       const packetGroup = g.append('g').attr('class', 'packets');
       const packets: PacketDatum[] = [];
-      for (let p = 0; p < 24; p++) {
+      for (let p = 0; p < 30; p++) {
         const randLink = links[Math.floor(Math.random() * links.length)];
         packets.push({
           id: p,
           sourceId: typeof randLink.source === 'string' ? randLink.source : (randLink.source as any).id,
           targetId: typeof randLink.target === 'string' ? randLink.target : (randLink.target as any).id,
           progress: Math.random(),
-          speed: (Math.random() * 0.01 + 0.005) * (config.packetRate / 1000),
+          speed: (Math.random() * 0.015 + 0.005) * (config.packetRate / 1000),
           color: Math.random() > 0.4 ? paletteColors.primary : paletteColors.accent,
         });
       }
@@ -221,11 +242,24 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
           d3
             .forceLink<SimNode, SimLink>(links)
             .id((d) => d.id)
-            .distance(70 / config.linkTension)
+            .distance((d) => (d.value > 2 ? 50 : 100) / config.linkTension)
         )
-        .force('charge', d3.forceManyBody().strength(-120 * config.intensity))
+        .force('charge', d3.forceManyBody().strength(-150 * config.intensity))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(25));
+        .force('x', d3.forceX(width / 2).strength(0.05))
+        .force('y', d3.forceY(height / 2).strength(0.05))
+        .force('cluster', (alpha: number) => {
+          // Attractive force towards cluster centers
+          nodes.forEach((d) => {
+            const cluster = clusters[d.group];
+            const gateway = nodes[d.group]; // We used gateways as centers
+            if (gateway && gateway !== d) {
+              d.vx! += (gateway.x! - d.x!) * alpha * 0.2 * config.intensity;
+              d.vy! += (gateway.y! - d.y!) * alpha * 0.2 * config.intensity;
+            }
+          });
+        })
+        .force('collision', d3.forceCollide<SimNode>().radius((d) => d.radius * 2.5));
 
       simulation.on('tick', () => {
         link
@@ -247,26 +281,47 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
           }
         });
 
-        const packetSelection = packetGroup.selectAll<SVGCircleElement, PacketDatum>('circle').data(packets, (d) => d.id);
+      // Trail configuration based on sentiment
+      const isCreative = sentiment === 'creative';
+      const isAnalytical = sentiment === 'analytical';
+      const trailLength = isCreative ? 0.15 : isAnalytical ? 0.05 : 0.08;
+      const packetRadius = isCreative ? 3.5 : 2.2;
 
-        packetSelection
-          .join('circle')
-          .attr('r', 2.8)
-          .attr('fill', (d) => d.color)
-          .attr('filter', 'url(#d3-glow)')
-          .attr('cx', (d) => {
-            const sNode = nodes.find((n) => n.id === d.sourceId);
-            const tNode = nodes.find((n) => n.id === d.targetId);
-            if (!sNode || !tNode || sNode.x === undefined || tNode.x === undefined) return 0;
-            return sNode.x + (tNode.x - sNode.x) * d.progress;
-          })
-          .attr('cy', (d) => {
-            const sNode = nodes.find((n) => n.id === d.sourceId);
-            const tNode = nodes.find((n) => n.id === d.targetId);
-            if (!sNode || !tNode || sNode.y === undefined || tNode.y === undefined) return 0;
-            return sNode.y + (tNode.y - sNode.y) * d.progress;
-          });
-      });
+      const packetSelection = packetGroup.selectAll<SVGLineElement, PacketDatum>('line').data(packets, (d) => d.id);
+
+      packetSelection
+        .join('line')
+        .attr('stroke', (d) => isCreative ? '#d946ef' : d.color)
+        .attr('stroke-width', packetRadius)
+        .attr('stroke-linecap', 'round')
+        .attr('filter', 'url(#d3-glow)')
+        .attr('x1', (d) => {
+          const sNode = nodes.find((n) => n.id === d.sourceId);
+          const tNode = nodes.find((n) => n.id === d.targetId);
+          if (!sNode || !tNode || sNode.x === undefined || tNode.x === undefined) return 0;
+          const trailProgress = Math.max(0, d.progress - trailLength);
+          return sNode.x + (tNode.x - sNode.x) * trailProgress;
+        })
+        .attr('y1', (d) => {
+          const sNode = nodes.find((n) => n.id === d.sourceId);
+          const tNode = nodes.find((n) => n.id === d.targetId);
+          if (!sNode || !tNode || sNode.y === undefined || tNode.y === undefined) return 0;
+          const trailProgress = Math.max(0, d.progress - trailLength);
+          return sNode.y + (tNode.y - sNode.y) * trailProgress;
+        })
+        .attr('x2', (d) => {
+          const sNode = nodes.find((n) => n.id === d.sourceId);
+          const tNode = nodes.find((n) => n.id === d.targetId);
+          if (!sNode || !tNode || sNode.x === undefined || tNode.x === undefined) return 0;
+          return sNode.x + (tNode.x - sNode.x) * d.progress;
+        })
+        .attr('y2', (d) => {
+          const sNode = nodes.find((n) => n.id === d.sourceId);
+          const tNode = nodes.find((n) => n.id === d.targetId);
+          if (!sNode || !tNode || sNode.y === undefined || tNode.y === undefined) return 0;
+          return sNode.y + (tNode.y - sNode.y) * d.progress;
+        });
+    });
 
       return () => {
         simulation.stop();

@@ -242,6 +242,15 @@ PRETTY_NAME="HyperTerminal WebGL/WASM 4D Sovereign OS"`,
           }, null, 2),
           metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-------', size: 180 },
         },
+        'macros.json': {
+          type: 'file',
+          content: JSON.stringify({
+            'sunset': 'render torus; sentiment tranquil; color #ff8800 #ff3300; speed 0.4',
+            'matrix': 'render neural; sentiment energetic; color #10b981 #059669; speed 1.8',
+            'galaxy-flight': 'render galaxy_vfs; speed 2.0; sentiment cosmic'
+          }, null, 2),
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 256 },
+        },
       },
     },
     bin: {

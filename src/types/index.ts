@@ -9,7 +9,8 @@ export type TopologyType =
   | 'neural'
   | 'galaxy'
   | 'spindle'
-  | 'dna';
+  | 'dna'
+  | 'galaxy_vfs';
 
 export type SentimentType =
   | 'analytical'
@@ -17,7 +18,8 @@ export type SentimentType =
   | 'alarm'
   | 'tranquil'
   | 'cosmic'
-  | 'chaos';
+  | 'chaos'
+  | 'creative';
 
 export type D3StreamShape = 'force' | 'streamgraph' | 'radar' | 'chord';
 

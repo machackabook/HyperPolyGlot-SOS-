@@ -396,6 +396,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   mcp list | call <tool> : Model Context Protocol 4 active servers
   macro record <name>    : Record terminal command sequences
   macro stop | run <name>: Save or execute macro script
+  macro alias <n> "<cmd>": Create persistent alias for command chain
   quine export           : Export 100% standalone offline running HTML
 
 [OMNI-NEXUS OS KERNEL & RECOVERY ENGINE]
@@ -686,10 +687,13 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
       // ==========================================
       case 'render': {
         const topo = (args[0] || '').toLowerCase() as TopologyType;
-        const validTopos: TopologyType[] = ['torus', 'tesseract', 'singularity', 'neural', 'galaxy', 'spindle', 'dna'];
+        const validTopos: TopologyType[] = ['torus', 'tesseract', 'singularity', 'neural', 'galaxy', 'spindle', 'dna', 'galaxy_vfs'];
         if (validTopos.includes(topo)) {
           setEnvState((prev) => ({ ...prev, topology: topo }));
           appendLine(`Background 3D Visualizer Topology switched to [${topo.toUpperCase()}].`, 'success', '⚡');
+          if (topo === 'galaxy_vfs') {
+            appendLine(`FILESYSTEM GALAXY ENGAGED. Use WASD / Arrow keys for neural traversal.`, 'system', '🌌');
+          }
           audioVoiceService.playTone(880, 'sine', 100);
         } else {
           appendLine(`Usage: render <${validTopos.join('|')}>`, 'error');
@@ -699,7 +703,7 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
 
       case 'sentiment': {
         const mood = (args[0] || '').toLowerCase() as SentimentType;
-        const validMoods: SentimentType[] = ['analytical', 'energetic', 'alarm', 'tranquil', 'cosmic', 'chaos'];
+        const validMoods: SentimentType[] = ['analytical', 'energetic', 'alarm', 'tranquil', 'cosmic', 'chaos', 'creative'];
         if (validMoods.includes(mood)) {
           const colorMap: Record<SentimentType, { p: string; s: string; speed: number; grav: number; turb: number }> = {
             analytical: { p: '#00f2ff', s: '#a855f7', speed: 1.0, grav: 1.2, turb: 0.5 },
@@ -708,6 +712,7 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
             tranquil: { p: '#10b981', s: '#00f2ff', speed: 0.6, grav: 0.8, turb: 0.2 },
             cosmic: { p: '#a855f7', s: '#3b82f6', speed: 1.1, grav: 1.4, turb: 0.8 },
             chaos: { p: '#ff00ff', s: '#00ffff', speed: 2.8, grav: 3.2, turb: 2.2 },
+            creative: { p: '#a855f7', s: '#ff00ff', speed: 1.4, grav: 1.0, turb: 1.2 },
           };
           const cfg = colorMap[mood];
           setEnvState((prev) => ({
@@ -1149,8 +1154,23 @@ Pool Liquidity: $54,820.50 USD   Stripe & Cash App Proxy Active`, 'table');
         break;
       }
 
-      case 'macro': {
+      case 'macro':
+      case 'alias': {
         const sub = (args[0] || 'list').toLowerCase();
+        const MACRO_FILE = '/etc/macros.json';
+
+        const getAliases = (): Record<string, string> => {
+          try {
+            return JSON.parse(vfs.readFile('/', MACRO_FILE));
+          } catch {
+            return {};
+          }
+        };
+
+        const saveAliases = (aliases: Record<string, string>) => {
+          vfs.writeFile('/', MACRO_FILE, JSON.stringify(aliases, null, 2));
+        };
+
         if (sub === 'record' || sub === 'start') {
           const name = args[1] || `macro_${Date.now().toString(36)}`;
           setRecordingMacro(name);
@@ -1165,7 +1185,7 @@ Pool Liquidity: $54,820.50 USD   Stripe & Cash App Proxy Active`, 'table');
             const scriptContent = `#!/bin/bash\n# Recorded Macro: ${name}\n${macroBufferRef.current.join('\n')}\n`;
             vfs.writeFile('/root', scriptPath, scriptContent);
             setRecordingMacro(null);
-            appendLine(`Saved macro '${name}' with ${macroBufferRef.current.length} commands to ${scriptPath}`, 'success');
+            appendLine(`Saved macro script '${name}' to ${scriptPath}`, 'success');
           }
         } else if (sub === 'run' || sub === 'exec') {
           if (!args[1]) {
@@ -1175,19 +1195,48 @@ Pool Liquidity: $54,820.50 USD   Stripe & Cash App Proxy Active`, 'table');
           try {
             const code = vfs.readFile('/root', `/root/scripts/${args[1].endsWith('.sh') ? args[1] : args[1] + '.sh'}`);
             const lines = code.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
-            appendLine(`Executing macro '${args[1]}' (${lines.length} steps)...`, 'system');
+            appendLine(`Executing macro script '${args[1]}' (${lines.length} steps)...`, 'system');
             for (const line of lines) {
               await processCommand(line);
             }
           } catch (err: any) {
             appendLine(err.message, 'error');
           }
+        } else if (sub === 'set' || sub === 'alias') {
+          const name = args[1];
+          const chain = args.slice(2).join(' ').replace(/^["']|["']$/g, '');
+          if (!name || !chain) {
+            appendLine('Usage: macro alias <name> "<cmd1>; <cmd2>; ..."', 'error');
+            break;
+          }
+          const aliases = getAliases();
+          aliases[name] = chain;
+          saveAliases(aliases);
+          appendLine(`Created alias '${name}' -> [${chain}]`, 'success', '🏷️');
+        } else if (sub === 'rm' || sub === 'unalias') {
+          const name = args[1];
+          if (!name) {
+            appendLine('Usage: macro unalias <name>', 'error');
+            break;
+          }
+          const aliases = getAliases();
+          if (aliases[name]) {
+            delete aliases[name];
+            saveAliases(aliases);
+            appendLine(`Removed alias '${name}'.`, 'system');
+          } else {
+            appendLine(`Alias '${name}' not found.`, 'error');
+          }
         } else {
           try {
-            const list = vfs.listDir('/root', '/root/scripts').map((f) => f.name);
-            appendLine(`VFS Macro Scripts:\n  ${list.join('\n  ')}`, 'output');
+            const scripts = vfs.listDir('/root', '/root/scripts').map((f) => f.name);
+            const aliases = getAliases();
+            const aliasList = Object.entries(aliases).map(([k, v]) => `  ${k.padEnd(12)} -> ${v}`);
+            
+            appendLine(`[MACRO ALIASES] (/etc/macros.json):\n${aliasList.length ? aliasList.join('\n') : '  (none)'}`, 'output');
+            appendLine(`[MACRO SCRIPTS] (/root/scripts):\n  ${scripts.length ? scripts.join('\n  ') : '(none)'}`, 'output');
           } catch {
-            appendLine('No macros found in /root/scripts.', 'system');
+            appendLine('No macros found.', 'system');
           }
         }
         break;
@@ -1694,6 +1743,22 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
       }
 
       default: {
+        // Check if command is an alias in /etc/macros.json
+        try {
+          const aliases = JSON.parse(vfs.readFile('/', '/etc/macros.json'));
+          if (aliases[cmd]) {
+            const chain = aliases[cmd];
+            const lines = chain.split(';').map((l: string) => l.trim()).filter(Boolean);
+            appendLine(`Executing alias '${cmd}' -> [${chain}]`, 'system', '🏷️');
+            for (const line of lines) {
+              await processCommand(line);
+            }
+            break;
+          }
+        } catch {
+          // No aliases or file missing, continue
+        }
+
         // Check if command is executable script in /root/scripts
         try {
           const scriptContent = vfs.readFile(cwd, raw);
@@ -2352,6 +2417,7 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
         }
         primaryColor={envState.primaryColor}
         secondaryColor={envState.secondaryColor}
+        sentiment={envState.sentiment}
       />
 
       {/* Interactive Command History Browser Modal (Ctrl+R / 'history') */}

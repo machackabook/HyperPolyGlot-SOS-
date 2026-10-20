@@ -51,12 +51,14 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'render galaxy', category: '3D Visuals', description: 'Project 7-Galaxy relativistic orbital frame-dragging', badge: 'SPACE' },
   { command: 'render spindle', category: '3D Visuals', description: 'Project Actuating quantum spindle turning with 33.3ms pulse', badge: 'PULSE' },
   { command: 'render dna', category: '3D Visuals', description: 'Project Algorithmic double-helix rotating strands', badge: 'BIO' },
+  { command: 'render galaxy_vfs', category: '3D Visuals', description: 'Project Filesystem Galaxy with interactive node traversal (WASD/Arrows)', badge: 'GALAXY' },
   { command: 'sentiment analytical', category: '3D Visuals', description: 'Set sentiment to Cyan & Violet balanced crystal physics', badge: 'MOOD' },
   { command: 'sentiment energetic', category: '3D Visuals', description: 'Set sentiment to Golden Amber & Magenta high-energy flare', badge: 'MOOD' },
   { command: 'sentiment alarm', category: '3D Visuals', description: 'Set sentiment to Crimson Red warning horizon with high turbulence', badge: 'MOOD' },
   { command: 'sentiment tranquil', category: '3D Visuals', description: 'Set sentiment to Emerald Green harmonic wave advection', badge: 'MOOD' },
   { command: 'sentiment cosmic', category: '3D Visuals', description: 'Set sentiment to Deep Purple relativistic frame dragging', badge: 'MOOD' },
   { command: 'sentiment chaos', category: '3D Visuals', description: 'Set sentiment to Chromatic RGB jitter and particle dispersion', badge: 'MOOD' },
+  { command: 'sentiment creative', category: '3D Visuals', description: 'Set sentiment to Warm Purple & Magenta aesthetic physics with long particle trails', badge: 'MOOD' },
   { command: 'color #00f2ff #a855f7', category: '3D Visuals', description: 'Set custom primary and secondary glowing hex colors', badge: 'COLOR' },
   { command: 'gravity 1.5', category: '3D Visuals', description: 'Adjust 4D gravitational tensor curvature (0.1 - 4.0)', badge: 'PHYS' },
   { command: 'speed 1.2', category: '3D Visuals', description: 'Adjust 3D rotation and wave advection speed multiplier', badge: 'PHYS' },
@@ -97,11 +99,13 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
 
   // Arbitrage & VoIP
   { command: 'arbitrage scan', category: 'Fintech', description: 'Scan cross-exchange liquidity spreads (BTC, ETH, SOL)', badge: 'ARB' },
+  { command: 'macro run nexus_boot', category: 'System', description: 'Execute recorded command macro script', badge: 'MACRO' },
+  { command: 'macro alias zen "calm; 963 on"', category: 'System', description: 'Create persistent alias for command chain', badge: 'ALIAS' },
+  { command: 'macro list', category: 'System', description: 'List all recorded scripts and active aliases', badge: 'SYS' },
   { command: 'voip status', category: 'System', description: 'Check virtual mobile VoIP & eSIM chassis telemetry', badge: 'VOIP' },
 
   // MCP & Macros
   { command: 'mcp list', category: 'System', description: 'List active in-process Model Context Protocol servers', badge: 'MCP' },
-  { command: 'macro list', category: 'System', description: 'Display all recorded automated VFS shell scripts', badge: 'MACRO' },
   { command: 'macro record deploy_flow', category: 'System', description: 'Record sequence of terminal commands to VFS script', badge: 'REC' },
 
   // D3 Live Data Streams & Telemetry

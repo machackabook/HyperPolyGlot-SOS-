@@ -248,6 +248,29 @@ class AmbientAudioService {
           type: 'sawtooth',
           lfoRate: 3.5,
         };
+      case 'creative':
+        // Lush 528 Hz transformation with major seventh harmonics and slow sweeps
+        return {
+          root: 528,
+          fifth: 990, // major seventh harmonic
+          sub: 132,
+          shimmer: 1584,
+          filterFreq: 1600,
+          q: 3.0,
+          type: 'triangle',
+          lfoRate: 0.6,
+        };
+      default:
+        return {
+          root: 432,
+          fifth: 648,
+          sub: 108,
+          shimmer: 864,
+          filterFreq: 1100,
+          q: 2.2,
+          type: 'sine',
+          lfoRate: 0.25,
+        };
     }
   }
 
