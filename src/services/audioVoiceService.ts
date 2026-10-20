@@ -22,6 +22,7 @@ class AudioVoiceService {
   private rate = 1.05;
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private speechListeners: ((speaking: boolean, text: string) => void)[] = [];
+  private speechLogListeners: ((text: string) => void)[] = [];
 
   // Microphone state & audio nodes
   private micStream: MediaStream | null = null;
@@ -512,6 +513,7 @@ class AudioVoiceService {
 
       utterance.onstart = () => {
         this.notifySpeech(true, cleanText);
+        this.notifySpeechLog(cleanText);
         this.playTone(528, 'sine', 150, 0.015);
       };
 
@@ -556,6 +558,17 @@ class AudioVoiceService {
     return () => {
       this.speechListeners = this.speechListeners.filter((l) => l !== cb);
     };
+  }
+
+  public onSpeechLog(cb: (text: string) => void): () => void {
+    this.speechLogListeners.push(cb);
+    return () => {
+      this.speechLogListeners = this.speechLogListeners.filter((l) => l !== cb);
+    };
+  }
+
+  private notifySpeechLog(text: string): void {
+    this.speechLogListeners.forEach((cb) => cb(text));
   }
 
   private notifySpeech(speaking: boolean, text: string): void {

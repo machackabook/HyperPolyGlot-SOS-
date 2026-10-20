@@ -46,6 +46,7 @@ import { ambientAudioService } from '../services/ambientAudioService';
 import { omniNexusService } from '../services/omniNexusService';
 import { exportQuineFile } from '../services/quineService';
 import { getCommandSuggestions, CommandSuggestion } from '../services/autocompleteService';
+import { geoNexusService } from '../services/geoNexusService';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
@@ -67,7 +68,7 @@ const BUILTIN_COMMANDS = [
   'voice', 'speak', 'mic', 'listen', '963', 'node', 'js', 'git', 'singularity', 'satcom',
   'swarm', 'arbitrage', 'voip', 'mcp', 'macro', 'quine', 'telemetry', 'date', 'uptime',
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
-  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive'
+  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync'
 ];
 
 export const HyperTerminal: React.FC<HyperTerminalProps> = ({ envState, setEnvState }) => {
@@ -176,6 +177,20 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     return unsub;
   }, [setEnvState]);
 
+  // Archive all Gemini speech responses to VFS log
+  useEffect(() => {
+    const unsub = audioVoiceService.onSpeechLog((text) => {
+      try {
+        const timestamp = new Date().toLocaleString();
+        const entry = `[${timestamp}] ${text}\n`;
+        vfs.writeFile('/', '/var/log/voice.log', entry, true);
+      } catch (err) {
+        console.error('Failed to archive speech response:', err);
+      }
+    });
+    return unsub;
+  }, []);
+
   // Sync speech-to-command microphone transcripts
   useEffect(() => {
     const unsub = audioVoiceService.onTranscript((transcript, isFinal) => {
@@ -266,6 +281,28 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     audioVoiceService.playEnterChirp();
     setInputVal('');
     setGhostSuggestion('');
+
+    // Alias expansion
+    let finalCmd = raw;
+    try {
+      const aliasesStr = vfs.readFile('/', '/etc/macros.json');
+      const aliases = JSON.parse(aliasesStr);
+      if (aliases[raw]) {
+        finalCmd = aliases[raw];
+        appendLine(`[Alias Expansion]: ${raw} -> ${finalCmd}`, 'system', '🏷️');
+      }
+    } catch (err) {
+      // No aliases or invalid file, skip
+    }
+
+    const commands = finalCmd.split(';').map(c => c.trim());
+    for (const cmdText of commands) {
+      await executeCommand(cmdText);
+    }
+  };
+
+  const executeCommand = async (raw: string) => {
+    if (!raw) return;
 
     // Capture in macro if currently recording
     if (recordingMacro && !raw.startsWith('macro stop') && !raw.startsWith('macro cancel')) {
@@ -367,6 +404,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   gravity <val>          : Set 4D gravitational tensor (0.2 to 3.5)
   speed <val>            : Set rotation / wave speed (0.2 to 3.0)
   turbulence <val>       : Adjust particle noise & wave distortion
+  bloom <val>            : Set global glow intensity (0.0 to 5.0)
   burst                  : Trigger particle supernova explosion wave
   calm                   : Stabilize into harmonic low-entropy resonance
   shatter                : Inject chaotic high-frequency perturbation
@@ -384,6 +422,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   voice on | off         : Toggle synthesized voice responses
   voice profile <name>   : Switch neural voice personas (sovereign, quantum, etc.)
   speak <text>           : Manually speak phrase with 3D projection
+  voicelog               : Review archive of all Gemini voice responses
   963 on | off           : Toggle real 963 Hz solfeggio pure sine oscillator
 
 [INTEGRATED SOVEREIGN PLATFORMS]
@@ -412,6 +451,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   stress <count>         : Skill Creatorial concurrent fault injection harness
   mount | umount <dev>   : Plug-n-play operating system volume manager
   engram | gdrive        : Google Drive & gemini.md memory engrams hub
+  geosync [on|off]       : Sync terminal with physical node & Earth descent
 
 [TERMINAL CONTROLS]
   history [-e]           : Open history browser or export to VFS (Ctrl+R)
@@ -687,7 +727,7 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
       // ==========================================
       case 'render': {
         const topo = (args[0] || '').toLowerCase() as TopologyType;
-        const validTopos: TopologyType[] = ['torus', 'tesseract', 'singularity', 'neural', 'galaxy', 'spindle', 'dna', 'galaxy_vfs'];
+        const validTopos: TopologyType[] = ['torus', 'tesseract', 'singularity', 'neural', 'galaxy', 'spindle', 'dna', 'galaxy_vfs', 'robotics_lab', 'protein_fold', 'earth_nasa'];
         if (validTopos.includes(topo)) {
           setEnvState((prev) => ({ ...prev, topology: topo }));
           appendLine(`Background 3D Visualizer Topology switched to [${topo.toUpperCase()}].`, 'success', '⚡');
@@ -1122,6 +1162,27 @@ Status: 100% HEALTHY   Packet Drop Rate: -0.00%
         break;
       }
 
+      case 'geosync': {
+        const sub = (args[0] || 'on').toLowerCase();
+        if (sub === 'off') {
+          setEnvState(prev => ({ ...prev, topology: 'torus' }));
+          appendLine('Geolocation synchronization detached. Returning to orbital torus.', 'system');
+        } else {
+          appendLine('Initializing Sovereign Physical Node Synchronization...', 'warn', '🛰️');
+          const tel = await geoNexusService.syncTerminalWithGeo();
+          setEnvState(prev => ({ ...prev, topology: 'earth_nasa' }));
+          
+          if (tel.weather) {
+            setTimeout(() => {
+              appendLine(`[AURORA GEOWEATHER]: ${tel.weather?.temp}°C, ${tel.weather?.description}. Syncing environmental shaders.`, 'ai', '⛅');
+            }, 3000);
+          }
+          
+          appendLine(`Transitioning to physical node: ${tel.plusCode} (${tel.lat.toFixed(4)}, ${tel.lng.toFixed(4)})`, 'success');
+        }
+        break;
+      }
+
       case 'arbitrage': {
         appendLine(`FINANCIAL ARBITRAGE LIQUIDITY SCANNER
   * BTC/USD  (Kraken $68,420 -> Binance $69,120) : Spread +1.02%  Net: +$700.00 [OPTIMAL]
@@ -1150,6 +1211,18 @@ Pool Liquidity: $54,820.50 USD   Stripe & Cash App Proxy Active`, 'table');
   4. system-mcp (v1.1.0)     : get_telemetry, get_environment`, 'table');
         } else {
           appendLine(`mcp: server '${args[1] || 'default'}' responded status=OK.`, 'success');
+        }
+        break;
+      }
+
+      case 'voicelog': {
+        try {
+          const log = vfs.readFile('/', '/var/log/voice.log');
+          appendLine('--- NEURAL VOICE ARCHIVE START ---', 'system');
+          appendLine(log, 'output');
+          appendLine('--- NEURAL VOICE ARCHIVE END ---', 'system');
+        } catch (err: any) {
+          appendLine(`Error reading voice log: ${err.message}`, 'error');
         }
         break;
       }
@@ -1531,6 +1604,18 @@ x-telemetry-status: STREAM_ACTIVE
           appendLine(`Terminal dock switched to [${mode.toUpperCase()}].`, 'success');
         } else {
           appendLine('Usage: dock <bottom|float|fullscreen>', 'error');
+        }
+        break;
+      }
+
+      case 'bloom': {
+        const val = parseFloat(args[0]);
+        if (!isNaN(val) && val >= 0 && val <= 5) {
+          setEnvState((prev) => ({ ...prev, bloomIntensity: val }));
+          appendLine(`Glow Bloom intensity set to ${val.toFixed(2)}`, 'success', '✨');
+          audioVoiceService.playTone(1100, 'sine', 100);
+        } else {
+          appendLine('Usage: bloom <0.0 - 5.0>', 'error');
         }
         break;
       }
@@ -2185,6 +2270,22 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                 <Download className="w-3 h-3" />
                 <span className="hidden md:inline">QUINE</span>
               </button>
+
+              {/* Bloom Intensity Slider */}
+              <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-black/40 border border-slate-800">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <input
+                  type="range"
+                  min="0"
+                  max="4"
+                  step="0.1"
+                  value={envState.bloomIntensity}
+                  onChange={(e) => setEnvState(prev => ({ ...prev, bloomIntensity: parseFloat(e.target.value) }))}
+                  className="w-16 h-1 accent-amber-500 cursor-pointer"
+                  title={`Glow Intensity: ${envState.bloomIntensity.toFixed(1)}`}
+                />
+                <span className="text-[9px] text-amber-300 font-mono hidden xl:inline">GLOW</span>
+              </div>
 
               {/* Opacity Cycle */}
               <button

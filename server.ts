@@ -61,7 +61,7 @@ Your task is to:
 1. Provide a knowledgeable, precise, cool, and technical terminal response (with helpful examples or shell commands when relevant).
 2. Analyze the sentiment and context of the user's message and the conversation.
 3. Dynamically alter the 3D visual background environment by providing exact parameters:
-   - topology: one of "torus", "tesseract", "singularity", "neural", "galaxy", "spindle", "dna", "galaxy_vfs"
+   - topology: one of "torus", "tesseract", "singularity", "neural", "galaxy", "spindle", "dna", "galaxy_vfs", "robotics_lab", "protein_fold", "earth_nasa"
    - sentiment: one of "analytical", "energetic", "alarm", "tranquil", "cosmic", "chaos", "creative"
    - primaryColor: a glowing hex color (e.g. #00f2ff, #ff003c, #ffd700, #10b981, #a855f7)
    - secondaryColor: an accent hex color
@@ -103,7 +103,7 @@ Your task is to:
                 },
                 topology: {
                   type: Type.STRING,
-                  description: '3D background topology: torus, tesseract, singularity, neural, galaxy, spindle, dna, galaxy_vfs.',
+                  description: '3D background topology: torus, tesseract, singularity, neural, galaxy, spindle, dna, galaxy_vfs, robotics_lab, protein_fold, earth_nasa.',
                 },
                 primaryColor: {
                   type: Type.STRING,
@@ -307,6 +307,44 @@ Provide a navigation data-burst description.`;
       description: `Intercepting ${nodeType} node at ${nodeName}. Data resonance stable.`,
       urgency: 'low'
     });
+  });
+
+  // API endpoint: /api/weather
+  // Proxies to Google Maps Weather API to avoid CORS and protect key
+  app.get('/api/weather', async (req, res) => {
+    const { lat, lng } = req.query;
+    const gmpKey = process.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!gmpKey) return res.status(500).json({ error: 'Maps API Key not configured' });
+
+    try {
+      const url = `https://weather.googleapis.com/v1/currentConditions:lookup?key=${gmpKey}&location.latitude=${lat}&location.longitude=${lng}&solution_id=gmp_mcp_codeassist_v1_aistudio`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Weather API returned ${response.status}`);
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error('[Weather API Proxy Error]:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API endpoint: /api/geocode
+  // Proxies to Google Maps Geocoding API
+  app.get('/api/geocode', async (req, res) => {
+    const { lat, lng } = req.query;
+    const gmpKey = process.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!gmpKey) return res.status(500).json({ error: 'Maps API Key not configured' });
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${gmpKey}&solution_id=gmp_mcp_codeassist_v1_aistudio`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Geocoding API returned ${response.status}`);
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error('[Geocoding API Proxy Error]:', err.message);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Serve static assets or mount Vite in development

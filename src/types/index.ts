@@ -10,7 +10,11 @@ export type TopologyType =
   | 'galaxy'
   | 'spindle'
   | 'dna'
-  | 'galaxy_vfs';
+  | 'dna'
+  | 'galaxy_vfs'
+  | 'robotics_lab'
+  | 'protein_fold'
+  | 'earth_nasa';
 
 export type SentimentType =
   | 'analytical'

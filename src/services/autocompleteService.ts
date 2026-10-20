@@ -52,6 +52,7 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'render spindle', category: '3D Visuals', description: 'Project Actuating quantum spindle turning with 33.3ms pulse', badge: 'PULSE' },
   { command: 'render dna', category: '3D Visuals', description: 'Project Algorithmic double-helix rotating strands', badge: 'BIO' },
   { command: 'render galaxy_vfs', category: '3D Visuals', description: 'Project Filesystem Galaxy with interactive node traversal (WASD/Arrows)', badge: 'GALAXY' },
+  { command: 'render earth_nasa', category: '3D Visuals', description: 'Project Photorealistic 3D Earth with space-to-surface descent animation', badge: 'MAPS' },
   { command: 'sentiment analytical', category: '3D Visuals', description: 'Set sentiment to Cyan & Violet balanced crystal physics', badge: 'MOOD' },
   { command: 'sentiment energetic', category: '3D Visuals', description: 'Set sentiment to Golden Amber & Magenta high-energy flare', badge: 'MOOD' },
   { command: 'sentiment alarm', category: '3D Visuals', description: 'Set sentiment to Crimson Red warning horizon with high turbulence', badge: 'MOOD' },
@@ -63,6 +64,7 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'gravity 1.5', category: '3D Visuals', description: 'Adjust 4D gravitational tensor curvature (0.1 - 4.0)', badge: 'PHYS' },
   { command: 'speed 1.2', category: '3D Visuals', description: 'Adjust 3D rotation and wave advection speed multiplier', badge: 'PHYS' },
   { command: 'turbulence 0.8', category: '3D Visuals', description: 'Adjust particle noise dispersion and wave distortion', badge: 'PHYS' },
+  { command: 'bloom 1.5', category: '3D Visuals', description: 'Adjust global glow bloom intensity and light scaling', badge: 'PHYS' },
   { command: 'burst', category: '3D Visuals', description: 'Trigger energetic particle supernova wave shockwave', badge: 'FX' },
   { command: 'calm', category: '3D Visuals', description: 'Stabilize background visual into low-frequency harmonic stasis', badge: 'FX' },
   { command: 'shatter', category: '3D Visuals', description: 'Inject catastrophic high-frequency resonance distortion', badge: 'FX' },
@@ -78,6 +80,7 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'voice off', category: 'AI & Voice', description: 'Mute spoken AI voice audio responses', badge: 'VOICE' },
   { command: 'voice tune 1.0 1.05', category: 'AI & Voice', description: 'Configure vocal pitch and rate characteristics', badge: 'VOICE' },
   { command: 'speak Polymorphic neurality online', category: 'AI & Voice', description: 'Vocalize custom speech phrase with floating 3D text', badge: 'VOICE' },
+  { command: 'voicelog', category: 'AI & Voice', description: 'Review persistent archive of all Gemini-generated voice responses', badge: 'LOG' },
   { command: '963 on', category: 'AI & Voice', description: 'Engage pure 963 Hz solfeggio harmonic sine wave oscillator', badge: 'AUDIO' },
   { command: '963 off', category: 'AI & Voice', description: 'Stop 963 Hz solfeggio audio oscillator', badge: 'AUDIO' },
 
@@ -161,6 +164,9 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'engram sync', category: 'AI & Voice', description: 'Synchronize gemini.md architectural memory to Google Drive', badge: 'ENGRAM' },
   { command: 'gdrive status', category: 'System', description: 'Inspect Google Drive HTTPDFS /mnt/httpdfs/gdrive/ mount state', badge: 'GDRIVE' },
 
+  { command: 'geosync on', category: 'System', description: 'Synchronize terminal with physical geolocation & trigger Earth descent', badge: 'GEO' },
+  { command: 'geosync off', category: 'System', description: 'Detach geolocation sync and return to orbital space void', badge: 'GEO' },
+
   // Quine
   { command: 'quine export', category: 'Quine', description: 'Export self-replicating standalone offline HTML Quine', badge: 'QUINE' },
 ];
@@ -177,6 +183,8 @@ export const CONTEXT_PARAM_EXPANSIONS: Record<
     { param: 'galaxy', desc: '7-Galaxy relativistic orbital frame-dragging', badge: 'SPACE', cat: '3D Visuals' },
     { param: 'spindle', desc: 'Actuating quantum spindle with 33.3ms pulse', badge: 'PULSE', cat: '3D Visuals' },
     { param: 'dna', desc: 'Algorithmic double-helix rotating strands', badge: 'BIO', cat: '3D Visuals' },
+    { param: 'galaxy_vfs', desc: 'Interactive filesystem galaxy', badge: 'VFS', cat: '3D Visuals' },
+    { param: 'earth_nasa', desc: 'Photorealistic 3D Earth (Google Maps)', badge: 'MAPS', cat: '3D Visuals' },
   ],
   sentiment: [
     { param: 'analytical', desc: 'Cyan & Violet crystal harmonic physics (432Hz)', badge: 'MOOD', cat: '3D Visuals' },

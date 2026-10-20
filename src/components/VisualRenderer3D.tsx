@@ -4,6 +4,9 @@ import { EnvironmentState, VfsNode } from '../types';
 import { audioVoiceService } from '../services/audioVoiceService';
 import { vfs } from '../services/vfsService';
 import { navigatorService } from '../services/navigatorService';
+import { geoNexusService, GeoTelemetry } from '../services/geoNexusService';
+import { EarthNasaOverlay } from './EarthNasaOverlay';
+import { useState } from 'react';
 
 interface VisualRenderer3DProps {
   envState: EnvironmentState;
@@ -24,6 +27,11 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
   const mountRef = useRef<HTMLDivElement | null>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const envRef = useRef<EnvironmentState>(envState);
+  const [geoTelemetry, setGeoTelemetry] = useState<GeoTelemetry>(geoNexusService.getTelemetry());
+
+  useEffect(() => {
+    return geoNexusService.onTelemetryChange(setGeoTelemetry);
+  }, []);
   const telemetryHistory = useRef<{
     packets: number[];
     throughput: number[];
@@ -52,6 +60,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 3000);
     camera.position.set(0, 0, 140);
+    camera.rotation.order = 'YXZ';
 
     const isHeadless = navigator.webdriver || /HeadlessChrome/i.test(navigator.userAgent);
     const renderer = new THREE.WebGLRenderer({
@@ -303,6 +312,57 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
     buildFilesystemGalaxy();
 
+    // Topology H: Robotics Lab (Laser Grid + Manipulators)
+    const roboticsLabGroup = new THREE.Group();
+    const gridHelper = new THREE.GridHelper(200, 20, 0x00f2ff, 0x02050b);
+    gridHelper.position.y = -50;
+    roboticsLabGroup.add(gridHelper);
+    const armGeo = new THREE.BoxGeometry(4, 30, 4);
+    const armMat = new THREE.MeshPhongMaterial({ color: 0x64748b, emissive: 0x334155 });
+    const arm = new THREE.Mesh(armGeo, armMat);
+    arm.position.set(0, -35, 0);
+    roboticsLabGroup.add(arm);
+    topologiesGroup.add(roboticsLabGroup);
+
+    // Topology I: Protein Fold (AlphaFold Ribbon)
+    const proteinFoldGroup = new THREE.Group();
+    const proteinPoints: THREE.Vector3[] = [];
+    for (let i = 0; i < 60; i++) {
+      proteinPoints.push(new THREE.Vector3(
+        Math.sin(i * 0.4) * 25,
+        i * 2 - 60,
+        Math.cos(i * 0.4) * 25
+      ));
+    }
+    const proteinCurve = new THREE.CatmullRomCurve3(proteinPoints);
+    const proteinGeo = new THREE.TubeGeometry(proteinCurve, 64, 2, 8, false);
+    const proteinMat = new THREE.MeshPhongMaterial({ color: 0x10b981, emissive: 0x064e3b, wireframe: true });
+    const proteinMesh = new THREE.Mesh(proteinGeo, proteinMat);
+    proteinFoldGroup.add(proteinMesh);
+    topologiesGroup.add(proteinFoldGroup);
+
+    // Topology J: Earth NASA (Planetary Mesh + Satellites)
+    const earthNasaGroup = new THREE.Group();
+    const earthGeo = new THREE.SphereGeometry(40, 64, 64);
+    const earthMat = new THREE.MeshPhongMaterial({ 
+      color: 0x1e3a8a, 
+      emissive: 0x1d4ed8, 
+      emissiveIntensity: 0.2,
+      wireframe: true 
+    });
+    const earth = new THREE.Mesh(earthGeo, earthMat);
+    earthNasaGroup.add(earth);
+    // Add satellite rings
+    for (let i = 0; i < 3; i++) {
+      const ringGeo = new THREE.TorusGeometry(55 + i * 10, 0.2, 8, 100);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f2ff, transparent: true, opacity: 0.4 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2 + (Math.random() - 0.5);
+      ring.rotation.y = (Math.random() - 0.5);
+      earthNasaGroup.add(ring);
+    }
+    topologiesGroup.add(earthNasaGroup);
+
     // 4. 4,000 Interactive Vector Flow Particles
     const PARTICLE_COUNT = 4000;
     const pGeo = new THREE.BufferGeometry();
@@ -405,6 +465,12 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     let mouseY = 0;
     let targetRotY = 0;
     let targetRotX = 0;
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let dragRotX = 0;
+    let dragRotY = 0;
+
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let hoveredNodeId: string | null = null;
@@ -415,13 +481,55 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
+    const onMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    };
+    const onMouseUp = () => { isDragging = false; };
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        isDragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }
+    };
+    const onTouchEnd = () => { isDragging = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (isDragging && e.touches.length > 0) {
+        const deltaX = e.touches[0].clientX - lastX;
+        const deltaY = e.touches[0].clientY - lastY;
+        dragRotY += deltaX * 0.005;
+        dragRotX += deltaY * 0.005;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }
+    };
+
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchstart', onTouchStart);
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchmove', onTouchMove);
+
     const onPointerMove = (e: MouseEvent) => {
       const nx = (e.clientX - width / 2) / (width / 2);
       const ny = (e.clientY - height / 2) / (height / 2);
       mouseX = nx;
       mouseY = ny;
+      
+      // Default parallax tilt (non-persistent)
       targetRotY = nx * 0.45;
       targetRotX = ny * 0.35;
+
+      if (isDragging) {
+        const deltaX = e.clientX - lastX;
+        const deltaY = e.clientY - lastY;
+        dragRotY += deltaX * 0.005;
+        dragRotX += deltaY * 0.005;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      }
 
       // Update mouse for raycasting
       mouse.x = (e.clientX / width) * 2 - 1;
@@ -470,8 +578,15 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       }
 
       // Smooth camera and group orientation
-      topologiesGroup.rotation.y += (targetRotY - topologiesGroup.rotation.y) * 0.05;
-      topologiesGroup.rotation.x += (targetRotX - topologiesGroup.rotation.x) * 0.05;
+      if (currentEnv.topology === 'galaxy_vfs') {
+        // In galaxy mode, drag rotates the camera look direction
+        camera.rotation.y = dragRotY + targetRotY * 0.2;
+        camera.rotation.x = -dragRotX + targetRotX * 0.2;
+      } else {
+        // In object modes, drag rotates the topology group
+        topologiesGroup.rotation.y += (dragRotY + targetRotY - topologiesGroup.rotation.y) * 0.05;
+        topologiesGroup.rotation.x += (dragRotX + targetRotX - topologiesGroup.rotation.x) * 0.05;
+      }
 
       // Visibility toggles based on active topology
       torusMesh.visible = currentEnv.topology === 'torus';
@@ -481,6 +596,9 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       galaxyGroup.visible = currentEnv.topology === 'galaxy';
       dnaGroup.visible = currentEnv.topology === 'dna';
       galaxyVfsGroup.visible = currentEnv.topology === 'galaxy_vfs';
+      roboticsLabGroup.visible = currentEnv.topology === 'robotics_lab';
+      proteinFoldGroup.visible = currentEnv.topology === 'protein_fold';
+      earthNasaGroup.visible = currentEnv.topology === 'earth_nasa';
 
       // Camera Movement for Galaxy VFS
       if (currentEnv.topology === 'galaxy_vfs') {
@@ -554,16 +672,23 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       // Primary color update for active material
       const targetCol = new THREE.Color(currentEnv.primaryColor);
       const secondaryCol = new THREE.Color(currentEnv.secondaryColor);
+      const bloom = currentEnv.bloomIntensity;
+
+      // Modulate lights
+      keyLight.intensity = 1.8 * bloom;
+      rimLight.intensity = 1.4 * bloom;
 
       // Animate active topology
       if (currentEnv.topology === 'torus') {
         torusMat.color.lerp(targetCol, 0.08);
+        torusMat.opacity = 0.55 * bloom;
         torusMesh.rotation.x = t * 0.5;
         torusMesh.rotation.y = t * 0.7;
         const scale = 1 + Math.sin(t * 3) * 0.06 + smoothedAudio * 0.35;
         torusMesh.scale.setScalar(scale);
       } else if (currentEnv.topology === 'tesseract') {
         tessLineMat.color.lerp(targetCol, 0.08);
+        tessLineMat.opacity = 0.85 * bloom;
         // 4D Givens rotation
         const angleXW = t * 0.7;
         const angleYZ = t * 0.5;
@@ -596,22 +721,44 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
         posAttr.needsUpdate = true;
       } else if (currentEnv.topology === 'singularity') {
         accretionMat.color.lerp(targetCol, 0.08);
+        accretionMat.opacity = 0.65 * bloom;
         accretionRing.rotation.z = t * 1.5;
         const pulse = 1 + Math.sin(t * 4) * 0.08 + smoothedAudio * 0.5;
         accretionRing.scale.setScalar(pulse);
       } else if (currentEnv.topology === 'neural') {
         axonMat.color.lerp(targetCol, 0.08);
+        axonMat.opacity = 0.45 * bloom;
         neuronMat.color.lerp(secondaryCol, 0.08);
+        neuronMat.opacity = 0.8 * bloom;
         neuralGroup.rotation.y = t * 0.4;
       } else if (currentEnv.topology === 'galaxy') {
         galaxyGroup.rotation.z = t * 0.3;
         galaxyGroup.rotation.y = t * 0.2;
+        // ring opacities could be modulated too but they were individual
       } else if (currentEnv.topology === 'dna') {
         dnaMat.color.lerp(targetCol, 0.08);
+        dnaMat.opacity = 0.7 * bloom;
         dnaGroup.rotation.y = t * 0.8;
       } else if (currentEnv.topology === 'galaxy_vfs') {
         // Master rotation of the galaxy
         galaxyVfsGroup.rotation.y = t * 0.05;
+      } else if (currentEnv.topology === 'robotics_lab') {
+        arm.rotation.y = t * 2;
+        arm.position.x = Math.sin(t) * 20;
+        gridHelper.material.opacity = 0.4 * bloom;
+      } else if (currentEnv.topology === 'protein_fold') {
+        proteinMat.color.lerp(targetCol, 0.08);
+        proteinFoldGroup.rotation.y = t * 0.5;
+        const scale = 1 + Math.sin(t * 2) * 0.1 + smoothedAudio * 0.3;
+        proteinFoldGroup.scale.setScalar(scale);
+      } else if (currentEnv.topology === 'earth_nasa') {
+        earth.rotation.y = t * 0.2;
+        earthMat.color.lerp(targetCol, 0.08);
+        earthNasaGroup.children.forEach((child, idx) => {
+          if (idx > 0) { // skip earth
+            child.rotation.z += 0.01 * currentEnv.speed;
+          }
+        });
       }
 
       // Animate Particles with Gravity & Audio reactivity
@@ -636,12 +783,13 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
         pPosArr[i3 + 2] = z;
 
         // Color modulation
-        pColArr[i3] = targetCol.r * (0.8 + smoothedAudio * 0.5);
-        pColArr[i3 + 1] = targetCol.g * (0.8 + smoothedAudio * 0.5);
-        pColArr[i3 + 2] = secondaryCol.b * (0.8 + smoothedAudio * 0.5);
+        pColArr[i3] = targetCol.r * (0.8 + smoothedAudio * 0.5) * bloom;
+        pColArr[i3 + 1] = targetCol.g * (0.8 + smoothedAudio * 0.5) * bloom;
+        pColArr[i3 + 2] = secondaryCol.b * (0.8 + smoothedAudio * 0.5) * bloom;
       }
       particleField.geometry.attributes.position.needsUpdate = true;
       particleField.geometry.attributes.color.needsUpdate = true;
+      pMat.opacity = 0.85 * Math.min(1.0, bloom);
 
       // Floating speech plane gentle hover
       speechPlane.position.y = 54 + Math.sin(t * 1.5) * 3;
@@ -671,6 +819,11 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
@@ -859,6 +1012,20 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     ctx.fillStyle = '#64748b';
     ctx.fillText(`G4: ${env.gravity.toFixed(2)} | V: ${env.speed.toFixed(2)}x`, w - 24, 60);
 
+    // Physical Geolocation Tracker (Top Left)
+    if (geoTelemetry.status === 'active') {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = `${env.primaryColor}88`;
+      ctx.font = 'bold 9px "Orbitron", sans-serif';
+      ctx.fillText('PHYSICAL NODE TRACKER', 24, 28);
+      ctx.font = '8px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#ffffffaa';
+      ctx.fillText(`LAT: ${geoTelemetry.lat.toFixed(6)}`, 24, 40);
+      ctx.fillText(`LNG: ${geoTelemetry.lng.toFixed(6)}`, 24, 50);
+      ctx.fillStyle = `${env.secondaryColor}aa`;
+      ctx.fillText(`PLUS: ${geoTelemetry.plusCode}`, 24, 60);
+    }
+
     // Solfeggio indicator
     if (env.solfeggio963) {
       ctx.fillStyle = '#10b981';
@@ -873,6 +1040,9 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
       {/* 2D Canvas Holographic HUD Overlay */}
       <canvas ref={hudCanvasRef} className="fixed inset-0 w-full h-full z-10 pointer-events-none" />
+
+      {/* Photorealistic 3D Earth Overlay (Google Maps Platform) */}
+      <EarthNasaOverlay active={envState.topology === 'earth_nasa'} />
 
       {/* Scanline CRT texture */}
       <div

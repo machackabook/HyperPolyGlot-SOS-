@@ -266,6 +266,23 @@ PRETTY_NAME="HyperTerminal WebGL/WASM 4D Sovereign OS"`,
         quine: { type: 'file', content: '[Ouroboros Self-Replicating HTML Engine]', metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 30000 } },
       },
     },
+    var: {
+      type: 'directory',
+      metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 4096 },
+      children: {
+        log: {
+          type: 'directory',
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 4096 },
+          children: {
+            'voice.log': {
+              type: 'file',
+              content: '=== HYPERTERMINAL NEURAL VOICE ARCHIVE ===\n',
+              metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 42 },
+            },
+          },
+        },
+      },
+    },
   },
 };
 
