@@ -31,6 +31,7 @@ import {
   HardDrive,
   Music,
   Palette,
+  Tv,
 } from 'lucide-react';
 import {
   EnvironmentState,
@@ -49,6 +50,7 @@ import { exportQuineFile } from '../services/quineService';
 import { getCommandSuggestions, CommandSuggestion } from '../services/autocompleteService';
 import { geoNexusService } from '../services/geoNexusService';
 import { computeRgbLedState, COLOR_PROFILES, RgbLedProfile, RgbLedMode } from '../services/colorProfileService';
+import { youtubeService, YOUTUBE_PRESET_TRACKS, CURATED_DYNAMIC_PLAYLISTS } from '../services/youtubeService';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
@@ -1017,6 +1019,17 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
           audioVoiceService.setVoiceParams(pitch, rate);
           setEnvState((prev) => ({ ...prev, voicePitch: pitch, voiceRate: rate }));
           appendLine(`Voice tuned: Pitch=${pitch}, Rate=${rate}x`, 'success');
+        } else if (sub === 'test') {
+          const testMsg = 'Sovereign Neural Core vocalizing. Real-time audio waveform active across terminal overlay and pulsing into the 3D void horizon.';
+          appendLine(`[AI Voice Waveform Test]: "${testMsg}"`, 'speech', '🎙️');
+          audioVoiceService.speak(testMsg);
+        } else if (sub === 'speak') {
+          const phrase = args.slice(1).join(' ').trim() || 'Neural audio waveform online.';
+          appendLine(`[Speaking]: "${phrase}"`, 'speech', '🎙️');
+          audioVoiceService.speak(phrase);
+        } else if (sub === 'stop' || sub === 'mute') {
+          audioVoiceService.stopSpeaking();
+          appendLine('AI voice speech stopped.', 'system');
         } else {
           setIsVoiceModalOpen(true);
         }
@@ -1904,6 +1917,234 @@ x-telemetry-status: STREAM_ACTIVE
         break;
       }
 
+      case 'music':
+      case 'yt':
+      case 'youtube': {
+        const sub = (args[0] || '').toLowerCase();
+        if (!sub || sub === 'modal' || sub === 'hub' || sub === 'open') {
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, showModal: true },
+          }));
+          appendLine('Opened YouTube Neural Music & Dynamic Playlist Hub [Google Auth Linked].', 'system', '📺');
+        } else if (sub === 'play') {
+          const query = args.slice(1).join(' ').trim();
+          const target = query ? youtubeService.resolveTrack(query) : envState.youtube.currentTrack;
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: {
+              ...prev.youtube,
+              active: true,
+              isPlaying: true,
+              currentTrack: target,
+            },
+          }));
+          appendLine(
+            `YouTube playing: [${target.title}] (${target.artist}) [Mode: ${envState.youtube.displayMode.toUpperCase()}].`,
+            'success',
+            '▶'
+          );
+        } else if (sub === 'playlist' || sub === 'pl') {
+          const plArg = args.slice(1).join(' ').trim().toLowerCase();
+          const allPl = [...CURATED_DYNAMIC_PLAYLISTS, ...(envState.youtube.customPlaylists || [])];
+          if (!plArg || plArg === 'list') {
+            appendLine('--- DYNAMIC YOUTUBE VIDEO PLAYLISTS ---', 'system', '🎵');
+            allPl.forEach((pl, i) => {
+              appendLine(
+                `[${i + 1}] ${pl.title} (${pl.tracks.length} videos) [Category: ${pl.category.toUpperCase()}] ${
+                  pl.id === envState.youtube.activePlaylistId ? '★ ACTIVE' : ''
+                }`,
+                'table'
+              );
+            });
+            appendLine('Usage: youtube playlist <synthwave|lofi|space|solfeggio|classical>', 'system');
+          } else {
+            const matched = allPl.find(
+              (p) =>
+                p.id.toLowerCase().includes(plArg) ||
+                p.category.toLowerCase().includes(plArg) ||
+                p.title.toLowerCase().includes(plArg)
+            );
+            if (matched && matched.tracks.length > 0) {
+              setEnvState((prev) => ({
+                ...prev,
+                youtube: {
+                  ...prev.youtube,
+                  active: true,
+                  isPlaying: true,
+                  activePlaylistId: matched.id,
+                  currentTrack: matched.tracks[0],
+                  currentTrackIndex: 0,
+                },
+              }));
+              appendLine(
+                `Switched to dynamic playlist [${matched.title}] (${matched.tracks.length} videos) [Mode: ${envState.youtube.displayMode.toUpperCase()}].`,
+                'success',
+                '▶'
+              );
+            } else {
+              appendLine(`Playlist matching "${plArg}" not found. Type 'youtube playlists' to list available playlists.`, 'error');
+            }
+          }
+        } else if (sub === 'playlists') {
+          const allPl = [...CURATED_DYNAMIC_PLAYLISTS, ...(envState.youtube.customPlaylists || [])];
+          appendLine('--- DYNAMIC YOUTUBE VIDEO PLAYLISTS ---', 'system', '🎵');
+          allPl.forEach((pl, i) => {
+            appendLine(
+              `[${i + 1}] ${pl.title} (${pl.tracks.length} videos) [${pl.category.toUpperCase()}] ${
+                pl.id === envState.youtube.activePlaylistId ? '★ ACTIVE' : ''
+              }`,
+              'table'
+            );
+          });
+          appendLine('Usage: youtube playlist <name>', 'system');
+        } else if (sub === 'pause') {
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, isPlaying: false },
+          }));
+          appendLine('YouTube playback paused.', 'system');
+        } else if (sub === 'resume') {
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, active: true, isPlaying: true },
+          }));
+          appendLine(`YouTube resumed: [${envState.youtube.currentTrack.title}]`, 'success', '▶');
+        } else if (sub === 'stop') {
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, active: false, isPlaying: false },
+          }));
+          appendLine('YouTube playback stopped.', 'system');
+        } else if (sub === 'next') {
+          const allPl = [...CURATED_DYNAMIC_PLAYLISTS, ...(envState.youtube.customPlaylists || [])];
+          const currPl = allPl.find((p) => p.id === envState.youtube.activePlaylistId) || CURATED_DYNAMIC_PLAYLISTS[0];
+          const list = currPl?.tracks || YOUTUBE_PRESET_TRACKS;
+          const nextIndex = (envState.youtube.currentTrackIndex + 1) % list.length;
+          const nextTrack = list[nextIndex];
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: {
+              ...prev.youtube,
+              active: true,
+              isPlaying: true,
+              currentTrack: nextTrack,
+              currentTrackIndex: nextIndex,
+            },
+          }));
+          appendLine(`Next stream loaded [${nextIndex + 1}/${list.length}]: [${nextTrack.title}]`, 'success', '⏭');
+        } else if (sub === 'prev' || sub === 'previous') {
+          const allPl = [...CURATED_DYNAMIC_PLAYLISTS, ...(envState.youtube.customPlaylists || [])];
+          const currPl = allPl.find((p) => p.id === envState.youtube.activePlaylistId) || CURATED_DYNAMIC_PLAYLISTS[0];
+          const list = currPl?.tracks || YOUTUBE_PRESET_TRACKS;
+          const prevIndex = (envState.youtube.currentTrackIndex - 1 + list.length) % list.length;
+          const prevTrack = list[prevIndex];
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: {
+              ...prev.youtube,
+              active: true,
+              isPlaying: true,
+              currentTrack: prevTrack,
+              currentTrackIndex: prevIndex,
+            },
+          }));
+          appendLine(`Previous stream loaded [${prevIndex + 1}/${list.length}]: [${prevTrack.title}]`, 'success', '⏮');
+        } else if (sub === 'bg' || sub === 'background') {
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, active: true, displayMode: 'background' },
+          }));
+          appendLine('YouTube video display mode transitioned to 100% FULL BACKGROUND RENDERER.', 'success', '🌌');
+        } else if (sub === 'pip') {
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, active: true, displayMode: 'pip' },
+          }));
+          appendLine('YouTube video display mode transitioned to FLOATING PICTURE-IN-PICTURE (PiP).', 'success', '📺');
+        } else if (sub === 'blend') {
+          const next = !envState.youtube.blendWith3D;
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, blendWith3D: next },
+          }));
+          appendLine(
+            `3D Visualizer canvas blending over video: [${next ? 'ENGAGED' : 'DISABLED'}].`,
+            'success',
+            '✨'
+          );
+        } else if (sub === 'opacity') {
+          const val = parseFloat(args[1] || '0.85');
+          const bounded = Math.max(0.1, Math.min(1.0, isNaN(val) ? 0.85 : val));
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, backgroundOpacity: bounded },
+          }));
+          appendLine(`YouTube background video opacity set to ${(bounded * 100).toFixed(0)}%`, 'success');
+        } else if (sub === 'vol' || sub === 'volume') {
+          const val = parseInt(args[1] || '75', 10);
+          const bounded = Math.max(0, Math.min(100, isNaN(val) ? 75 : val));
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, volume: bounded, isMuted: bounded === 0 },
+          }));
+          appendLine(`YouTube volume set to ${bounded}%`, 'success');
+        } else if (sub === 'auth' || sub === 'profile' || sub === 'whoami') {
+          const profile = envState.youtube.userProfile;
+          appendLine(`[GOOGLE AUTHENTICATION & SYSTEM CUSTOMIZATION STATUS]
+User Name       : ${profile.name}
+Google Email    : ${profile.email}
+Authenticated   : ${profile.isAuthenticated ? 'YES (Sovereign Operator)' : 'NO (Guest Mode)'}
+Account Type    : ${profile.accountType.toUpperCase()}
+Last Auth Sync  : ${profile.lastLogin}
+Customizations  :
+  • Default Mode: ${profile.preferences.defaultVideoMode.toUpperCase()}
+  • Video Opacity: ${(profile.preferences.defaultOpacity * 100).toFixed(0)}%
+  • Blend with 3D: ${profile.preferences.defaultBlendWith3D ? 'YES' : 'NO'}
+  • Harmonic Res : ${profile.preferences.harmonicFrequency.toUpperCase()} Hz
+  • Preferred Cat: ${profile.preferences.preferredCategory.toUpperCase()}`, 'table', '👤');
+        } else if (sub === 'login' || sub === 'signin' || sub === 'logout') {
+          const isCurrentlyAuth = envState.youtube.userProfile.isAuthenticated;
+          const nextAuth = sub === 'logout' ? false : !isCurrentlyAuth;
+          const updated = {
+            ...envState.youtube.userProfile,
+            isAuthenticated: nextAuth,
+            accountType: nextAuth ? ('sovereign_operator' as const) : ('guest' as const),
+            lastLogin: new Date().toISOString(),
+          };
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: {
+              ...prev.youtube,
+              userProfile: updated,
+            },
+          }));
+          youtubeService.saveStoredProfile(updated);
+          appendLine(
+            nextAuth
+              ? `Signed in with Google Account (${updated.email}). System customizations active.`
+              : 'Signed out of Google Account. Operating in Guest Mode.',
+            'success',
+            '🔑'
+          );
+        } else if (sub === 'list') {
+          appendLine('--- CURATED YOUTUBE MUSIC PRESETS ---', 'system');
+          YOUTUBE_PRESET_TRACKS.forEach((t, i) => {
+            appendLine(`[${i + 1}] ${t.title} (${t.artist}) [${t.category.toUpperCase()}] - ID: ${t.id}`, 'system');
+          });
+          appendLine('Usage: youtube play <name|id|url>', 'system');
+        } else {
+          // If query supplied directly like `youtube lofi` or `youtube synthwave`
+          const target = youtubeService.resolveTrack(args.join(' '));
+          setEnvState((prev) => ({
+            ...prev,
+            youtube: { ...prev.youtube, active: true, isPlaying: true, currentTrack: target },
+          }));
+          appendLine(`YouTube playing: [${target.title}] (${target.artist})`, 'success', '▶');
+        }
+        break;
+      }
+
       case 'chronos': {
         const proof = omniNexusService.generateChronosBeat();
         audioVoiceService.playEarcon('ping');
@@ -2434,6 +2675,51 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                 <Music className="w-3.5 h-3.5" />
               </button>
 
+              {/* YouTube Background Video & Music Stream Quick Action */}
+              <button
+                onClick={() =>
+                  setEnvState((prev) => ({
+                    ...prev,
+                    youtube: { ...prev.youtube, showModal: true },
+                  }))
+                }
+                className={`px-2 py-1 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  envState.youtube?.active
+                    ? 'bg-red-500/25 text-red-300 border-red-500/60 shadow-[0_0_12px_rgba(239,68,68,0.35)]'
+                    : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title="Open YouTube Music Hub (Dynamic stream selection & background video transition)"
+              >
+                <Tv className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden sm:inline">
+                  {envState.youtube?.active
+                    ? (envState.youtube.isPlaying ? 'YT: PLAYING' : 'YT: PAUSED')
+                    : 'YT MUSIC'}
+                </span>
+              </button>
+
+              {envState.youtube?.active && (
+                <button
+                  onClick={() =>
+                    setEnvState((prev) => ({
+                      ...prev,
+                      youtube: {
+                        ...prev.youtube,
+                        displayMode: prev.youtube.displayMode === 'background' ? 'pip' : 'background',
+                      },
+                    }))
+                  }
+                  className={`px-2 py-1 rounded border text-[10px] font-bold cursor-pointer ${
+                    envState.youtube.displayMode === 'background'
+                      ? 'bg-cyan-500/30 text-cyan-300 border-cyan-400'
+                      : 'bg-black/40 text-slate-400 border-slate-800'
+                  }`}
+                  title="Toggle YouTube Video in Full 100% Background"
+                >
+                  {envState.youtube.displayMode === 'background' ? 'BG VID: ON' : 'BG VID: OFF'}
+                </button>
+              )}
+
               {/* Restore Button */}
               <button
                 onClick={() => setIsPureCanvas(false)}
@@ -2732,6 +3018,62 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                 <Music className="w-3 h-3 text-purple-400" />
                 <span>{envState.ambientSoundscape ? `AMBIENT: ${envState.sentiment.toUpperCase()}` : 'AMBIENT'}</span>
               </button>
+
+              {/* YouTube Neural Music Stream & Background Video Hub */}
+              <button
+                onClick={() =>
+                  setEnvState((prev) => ({
+                    ...prev,
+                    youtube: { ...prev.youtube, showModal: true },
+                  }))
+                }
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  envState.youtube?.active
+                    ? 'bg-red-500/25 text-red-300 border-red-500/60 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                    : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title="Open YouTube Music Hub (Dynamic stream selection & background video transition)"
+              >
+                <Tv className="w-3 h-3 text-red-400" />
+                <span className="flex items-center gap-1">
+                  <span>YT:</span>
+                  <span className="truncate max-w-[90px] font-mono">
+                    {envState.youtube?.active
+                      ? (envState.youtube.isPlaying ? envState.youtube.currentTrack.title : 'PAUSED')
+                      : 'MUSIC'}
+                  </span>
+                  {envState.youtube?.active && envState.youtube.isPlaying && (
+                    <span className="flex items-end gap-0.5 h-2">
+                      <span className="w-0.5 h-1.5 bg-red-400 animate-pulse" />
+                      <span className="w-0.5 h-2 bg-red-400 animate-ping" />
+                      <span className="w-0.5 h-1 bg-red-400 animate-pulse" />
+                    </span>
+                  )}
+                </span>
+              </button>
+
+              {/* Quick Background Video Transition Toggle */}
+              {envState.youtube?.active && (
+                <button
+                  onClick={() =>
+                    setEnvState((prev) => ({
+                      ...prev,
+                      youtube: {
+                        ...prev.youtube,
+                        displayMode: prev.youtube.displayMode === 'background' ? 'pip' : 'background',
+                      },
+                    }))
+                  }
+                  className={`px-1.5 py-0.5 rounded border text-[9px] font-bold cursor-pointer ${
+                    envState.youtube.displayMode === 'background'
+                      ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400'
+                      : 'bg-black/40 text-slate-400 border-slate-800'
+                  }`}
+                  title="Toggle YouTube Video in Full 100% Background"
+                >
+                  {envState.youtube.displayMode === 'background' ? 'BG VID' : 'PIP'}
+                </button>
+              )}
             </div>
 
             {/* Knowledge & Tools Group */}
@@ -2771,6 +3113,20 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
               >
                 <Radio className="w-3 h-3 text-purple-400" />
                 <span>VOICE: {envState.voiceProfile.toUpperCase()}</span>
+              </button>
+
+              {/* Voice Test Waveform Trigger */}
+              <button
+                onClick={() => {
+                  const testMsg = 'Sovereign Neural Core online. Real-time audio waveform active across terminal overlay and 3D void horizon.';
+                  appendLine(`[AI Voice Waveform Test]: "${testMsg}"`, 'speech', '🎙️');
+                  audioVoiceService.speak(testMsg);
+                }}
+                className="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-400/50 text-[10px] font-bold transition cursor-pointer flex items-center gap-1 shadow-[0_0_10px_rgba(0,242,255,0.25)]"
+                title="Test AI Voice Response & Real-Time Waveform Overlay in 3D Void"
+              >
+                <Sparkles className="w-3 h-3 text-cyan-400" />
+                <span>TEST WAVEFORM</span>
               </button>
 
               {/* Command History */}

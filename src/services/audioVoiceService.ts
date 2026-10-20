@@ -10,6 +10,16 @@ export interface MicrophoneAudioData {
   isSpeaking: boolean;
 }
 
+export interface VoiceAudioData {
+  volume: number;
+  frequencyData: Uint8Array;
+  waveformData: Uint8Array;
+  isSpeaking: boolean;
+  activeText: string;
+  profile: string;
+  carrierFreq: number;
+}
+
 class AudioVoiceService {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -23,6 +33,19 @@ class AudioVoiceService {
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private speechListeners: ((speaking: boolean, text: string) => void)[] = [];
   private speechLogListeners: ((text: string) => void)[] = [];
+
+  // Dedicated AI Voice Output Web Audio Stream & Analyser
+  private voiceAnalyser: AnalyserNode | null = null;
+  private voiceFrequencyData: Uint8Array | null = null;
+  private voiceWaveformData: Uint8Array | null = null;
+  private isVoiceSpeaking = false;
+  private currentSpokenText = '';
+  private voiceCarrierOsc: OscillatorNode | null = null;
+  private voiceFormantFilter: BiquadFilterNode | null = null;
+  private voiceCarrierGain: GainNode | null = null;
+  private voiceAnimTimer: any = null;
+  private voiceSynthTime = 0;
+  private combinedFrequencyBuffer: Uint8Array | null = null;
 
   // Microphone state & audio nodes
   private micStream: MediaStream | null = null;
@@ -122,6 +145,230 @@ class AudioVoiceService {
     if (!this.analyser || !this.frequencyData) return null;
     (this.analyser as any).getByteFrequencyData(this.frequencyData);
     return this.frequencyData;
+  }
+
+  // =========================================================================
+  // AI VOICE RESPONSE OUTPUT WEB AUDIO STREAM & REAL-TIME ANALYSER
+  // =========================================================================
+
+  private initVoiceAnalyser(): AnalyserNode {
+    const ctx = this.initContext();
+    if (!this.voiceAnalyser) {
+      this.voiceAnalyser = ctx.createAnalyser();
+      this.voiceAnalyser.fftSize = 256;
+      this.voiceAnalyser.smoothingTimeConstant = 0.75;
+      this.voiceFrequencyData = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
+      this.voiceWaveformData = new Uint8Array(this.voiceAnalyser.fftSize);
+    }
+    return this.voiceAnalyser;
+  }
+
+  public startVoiceAudioStream(text: string): void {
+    const ctx = this.initContext();
+    const analyser = this.initVoiceAnalyser();
+    this.isVoiceSpeaking = true;
+    this.currentSpokenText = text;
+    this.voiceSynthTime = 0;
+
+    const profile = this.getCurrentProfile();
+    const carrier = profile?.carrierFreq || 432;
+
+    try {
+      this.stopVoiceAudioStream();
+
+      // Create carrier oscillator and dual resonant formant filters
+      const osc = ctx.createOscillator();
+      const formant1 = ctx.createBiquadFilter();
+      const formant2 = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(carrier * (this.pitch || 1.0), ctx.currentTime);
+
+      formant1.type = 'bandpass';
+      formant1.frequency.setValueAtTime(800, ctx.currentTime);
+      formant1.Q.setValueAtTime(3.0, ctx.currentTime);
+
+      formant2.type = 'bandpass';
+      formant2.frequency.setValueAtTime(2200, ctx.currentTime);
+      formant2.Q.setValueAtTime(4.0, ctx.currentTime);
+
+      // Subtle vocal presence gain
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.018, ctx.currentTime + 0.08);
+
+      osc.connect(formant1);
+      formant1.connect(formant2);
+      formant2.connect(gain);
+
+      // Connect to voice analyser & master analyser
+      gain.connect(analyser);
+      if (this.analyser) {
+        gain.connect(this.analyser);
+      }
+      // Connect to audio destination at subtle level
+      gain.connect(ctx.destination);
+
+      osc.start();
+
+      this.voiceCarrierOsc = osc;
+      this.voiceFormantFilter = formant1;
+      this.voiceCarrierGain = gain;
+
+      // Modulation loop to simulate human formant movement across phonemes
+      let step = 0;
+      const words = text.split(/\s+/);
+      const totalWords = Math.max(1, words.length);
+
+      if (this.voiceAnimTimer) clearInterval(this.voiceAnimTimer);
+      this.voiceAnimTimer = setInterval(() => {
+        if (!this.isVoiceSpeaking || !this.voiceCarrierOsc || !this.voiceCarrierGain || !this.voiceFormantFilter) {
+          if (this.voiceAnimTimer) clearInterval(this.voiceAnimTimer);
+          return;
+        }
+
+        step++;
+        this.voiceSynthTime += 0.05;
+        const now = ctx.currentTime;
+        const currentWord = words[Math.floor(step / 6) % totalWords] || 'voice';
+
+        // Modulate formant filter based on vowel sounds in active word
+        const vowels = (currentWord.match(/[aeiou]/gi) || []).length;
+        const baseF1 = 450 + (vowels % 4) * 280 + Math.sin(step * 0.4) * 120;
+        const targetPitch = carrier * (this.pitch || 1.0) * (1 + Math.sin(step * 0.25) * 0.08);
+
+        this.voiceCarrierOsc.frequency.setTargetAtTime(targetPitch, now, 0.04);
+        this.voiceFormantFilter.frequency.setTargetAtTime(baseF1, now, 0.05);
+
+        // Syllable volume envelope dip and rise
+        const syllableVol = 0.012 + Math.abs(Math.sin(step * 0.6)) * 0.015;
+        this.voiceCarrierGain.gain.setTargetAtTime(syllableVol, now, 0.03);
+      }, 50);
+
+    } catch (e) {
+      console.warn('Voice Web Audio stream initialization note:', e);
+    }
+  }
+
+  public stopVoiceAudioStream(): void {
+    if (this.voiceAnimTimer) {
+      clearInterval(this.voiceAnimTimer);
+      this.voiceAnimTimer = null;
+    }
+
+    if (this.voiceCarrierGain && this.audioCtx) {
+      try {
+        this.voiceCarrierGain.gain.setTargetAtTime(0.0001, this.audioCtx.currentTime, 0.05);
+      } catch {}
+    }
+
+    if (this.voiceCarrierOsc) {
+      try {
+        this.voiceCarrierOsc.stop(this.audioCtx ? this.audioCtx.currentTime + 0.08 : 0);
+        this.voiceCarrierOsc.disconnect();
+      } catch {}
+      this.voiceCarrierOsc = null;
+    }
+
+    this.voiceFormantFilter = null;
+    this.voiceCarrierGain = null;
+    this.isVoiceSpeaking = false;
+    this.currentSpokenText = '';
+  }
+
+  public getVoiceAudioData(): VoiceAudioData | null {
+    if (!this.isVoiceSpeaking && !this.isMicActive) {
+      return null;
+    }
+
+    const profile = this.getCurrentProfile();
+    const carrierFreq = profile?.carrierFreq || 432;
+
+    if (this.voiceAnalyser && this.voiceFrequencyData && this.voiceWaveformData) {
+      (this.voiceAnalyser as any).getByteFrequencyData(this.voiceFrequencyData);
+      (this.voiceAnalyser as any).getByteTimeDomainData(this.voiceWaveformData);
+
+      // Compute RMS volume
+      let sum = 0;
+      for (let i = 0; i < this.voiceWaveformData.length; i++) {
+        const norm = (this.voiceWaveformData[i] - 128) / 128;
+        sum += norm * norm;
+      }
+      const rms = Math.sqrt(sum / this.voiceWaveformData.length);
+      const volume = Math.min(1.0, rms * 5.2);
+
+      return {
+        volume,
+        frequencyData: this.voiceFrequencyData,
+        waveformData: this.voiceWaveformData,
+        isSpeaking: this.isVoiceSpeaking,
+        activeText: this.currentSpokenText,
+        profile: profile.name,
+        carrierFreq,
+      };
+    } else {
+      // Synthetic acoustic fallback for headless / server / isolated canvas
+      if (!this.voiceFrequencyData) this.voiceFrequencyData = new Uint8Array(128);
+      if (!this.voiceWaveformData) this.voiceWaveformData = new Uint8Array(256);
+
+      this.voiceSynthTime += 0.06;
+      const t = this.voiceSynthTime;
+      const voiceVol = this.isVoiceSpeaking ? (0.35 + Math.sin(t * 4.2) * 0.25) : 0;
+
+      for (let i = 0; i < this.voiceWaveformData.length; i++) {
+        const wave = Math.sin(t * 12 + i * 0.14) * 55 * voiceVol + Math.cos(t * 5 + i * 0.28) * 30 * voiceVol;
+        this.voiceWaveformData[i] = Math.max(0, Math.min(255, Math.floor(128 + wave)));
+      }
+      for (let i = 0; i < this.voiceFrequencyData.length; i++) {
+        const freqVal = (Math.sin(t * 3.5 + i * 0.18) * 0.5 + 0.5) * 210 * voiceVol;
+        this.voiceFrequencyData[i] = Math.floor(freqVal);
+      }
+
+      return {
+        volume: voiceVol,
+        frequencyData: this.voiceFrequencyData,
+        waveformData: this.voiceWaveformData,
+        isSpeaking: this.isVoiceSpeaking,
+        activeText: this.currentSpokenText,
+        profile: profile.name,
+        carrierFreq,
+      };
+    }
+  }
+
+  public isAiSpeaking(): boolean {
+    return this.isVoiceSpeaking;
+  }
+
+  public getActiveSpeechText(): string {
+    return this.currentSpokenText;
+  }
+
+  public getCombinedAudioFrequencyData(): Uint8Array | null {
+    if (!this.combinedFrequencyBuffer) {
+      this.combinedFrequencyBuffer = new Uint8Array(128);
+    }
+
+    const voiceData = this.getVoiceAudioData();
+    const micData = this.isMicActive ? this.getMicrophoneAudioData() : null;
+    const baseAudio = this.getAudioFrequencyData();
+
+    // Fast blend into combinedFrequencyBuffer
+    for (let i = 0; i < 128; i++) {
+      let maxVal = 0;
+      if (voiceData && voiceData.isSpeaking && voiceData.frequencyData) {
+        maxVal = Math.max(maxVal, voiceData.frequencyData[i] || 0);
+      }
+      if (micData && micData.isSpeaking && micData.frequencyData) {
+        maxVal = Math.max(maxVal, micData.frequencyData[i] || 0);
+      }
+      if (baseAudio) {
+        maxVal = Math.max(maxVal, baseAudio[i] || 0);
+      }
+      this.combinedFrequencyBuffer[i] = maxVal;
+    }
+
+    return this.combinedFrequencyBuffer;
   }
 
   // =========================================================================
@@ -512,17 +759,20 @@ class AudioVoiceService {
       utterance.rate = this.rate;
 
       utterance.onstart = () => {
+        this.startVoiceAudioStream(cleanText);
         this.notifySpeech(true, cleanText);
         this.notifySpeechLog(cleanText);
         this.playTone(528, 'sine', 150, 0.015);
       };
 
       utterance.onend = () => {
+        this.stopVoiceAudioStream();
         this.notifySpeech(false, '');
         resolve();
       };
 
       utterance.onerror = () => {
+        this.stopVoiceAudioStream();
         this.notifySpeech(false, '');
         resolve();
       };
@@ -534,8 +784,9 @@ class AudioVoiceService {
   public stopSpeaking(): void {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      this.notifySpeech(false, '');
     }
+    this.stopVoiceAudioStream();
+    this.notifySpeech(false, '');
   }
 
   public setVoiceEnabled(enabled: boolean): void {

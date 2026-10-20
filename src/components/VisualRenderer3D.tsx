@@ -403,6 +403,77 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     const particleField = new THREE.Points(pGeo, pMat);
     scene.add(particleField);
 
+    // =========================================================================
+    // 3D VOID FREQUENCY WAVEFORM MATRIX & AUDIO SPECTRUM HORIZON RIBBON
+    // =========================================================================
+    const voidWaveformGroup = new THREE.Group();
+    scene.add(voidWaveformGroup);
+
+    // 1. 3D Cylindrical Audio Frequency Horizon Ribbon (128 Frequency Bins)
+    const waveSegments = 128;
+    const ribbonRadius = 90;
+    const ribbonHeight = 32;
+    const ribbonGeo = new THREE.CylinderGeometry(ribbonRadius, ribbonRadius + 6, ribbonHeight, waveSegments, 4, true);
+    const ribbonBasePositions = ribbonGeo.attributes.position.clone();
+    const ribbonMat = new THREE.MeshBasicMaterial({
+      color: 0x00f2ff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const ribbonMesh = new THREE.Mesh(ribbonGeo, ribbonMat);
+    voidWaveformGroup.add(ribbonMesh);
+
+    // 2. 48 Radial 3D Spectrum Frequency Equalizer Pillars in the Void
+    const pillarCount = 48;
+    const pillarMeshes: THREE.Mesh[] = [];
+    const pillarGeo = new THREE.CylinderGeometry(0.8, 1.2, 1, 8);
+    const pillarRadius = 112;
+    const pillarGroup = new THREE.Group();
+    voidWaveformGroup.add(pillarGroup);
+
+    for (let p = 0; p < pillarCount; p++) {
+      const angle = (p / pillarCount) * Math.PI * 2;
+      const px = Math.cos(angle) * pillarRadius;
+      const pz = Math.sin(angle) * pillarRadius;
+      const pMat = new THREE.MeshBasicMaterial({
+        color: p % 2 === 0 ? 0x00f2ff : 0xa855f7,
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+      });
+      const mesh = new THREE.Mesh(pillarGeo, pMat);
+      mesh.position.set(px, 0, pz);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(px, 0, pz).normalize());
+      pillarGroup.add(mesh);
+      pillarMeshes.push(mesh);
+    }
+
+    // 3. Expanding Sonic Shockwave Rings in Void
+    const shockwaveRings: { mesh: THREE.Mesh; scale: number; maxScale: number; speed: number; opacity: number }[] = [];
+    const ringGeo = new THREE.RingGeometry(16, 18.5, 64);
+    for (let s = 0; s < 3; s++) {
+      const sMat = new THREE.MeshBasicMaterial({
+        color: 0x00f2ff,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+      });
+      const sMesh = new THREE.Mesh(ringGeo, sMat);
+      sMesh.rotation.x = Math.PI * 0.5;
+      voidWaveformGroup.add(sMesh);
+      shockwaveRings.push({
+        mesh: sMesh,
+        scale: 1 + s * 2,
+        maxScale: 14,
+        speed: 0.08 + s * 0.03,
+        opacity: 0,
+      });
+    }
+
     // 5. Floating 3D Holographic Speech Banner
     const speechCanvas = document.createElement('canvas');
     speechCanvas.width = 1024;
@@ -562,15 +633,21 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       const currentEnv = envRef.current;
       const t = (now * 0.0008 * currentEnv.speed) % 86400;
 
-      // Real-time audio analyser polling
-      const audioBytes = audioVoiceService.getAudioFrequencyData();
+      // Real-time Web Audio analyser polling: combine AI voice output stream, mic, and tones
+      const combinedFreq = audioVoiceService.getCombinedAudioFrequencyData();
+      const voiceAudioData = audioVoiceService.getVoiceAudioData();
+      const isVoiceActive = voiceAudioData ? voiceAudioData.isSpeaking : false;
+
       let audioVolume = 0;
-      if (audioBytes && audioBytes.length > 0) {
+      if (combinedFreq && combinedFreq.length > 0) {
         let sum = 0;
-        for (let i = 0; i < audioBytes.length; i++) sum += audioBytes[i];
-        audioVolume = (sum / audioBytes.length) / 255;
+        for (let i = 0; i < combinedFreq.length; i++) sum += combinedFreq[i];
+        audioVolume = (sum / combinedFreq.length) / 255;
       }
-      smoothedAudio += (audioVolume - smoothedAudio) * 0.2;
+      if (voiceAudioData && voiceAudioData.volume > audioVolume) {
+        audioVolume = voiceAudioData.volume;
+      }
+      smoothedAudio += (audioVolume - smoothedAudio) * 0.22;
 
       // Update 3D Holographic Speech Texture if text changed
       if (currentEnv.activeSpeechText !== lastSpokenText) {
@@ -775,6 +852,77 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
         });
       }
 
+      // =========================================================================
+      // ANIMATE 3D VOID FREQUENCY WAVEFORM MATRIX & AUDIO SPECTRUM HORIZON
+      // =========================================================================
+      const reactiveLevel = currentEnv.audioReactiveLevel || 1.0;
+      voidWaveformGroup.rotation.y = t * 0.18;
+
+      // 1. Modulate 3D Cylindrical Wave Ribbon vertices with real-time frequency bins
+      if (combinedFreq) {
+        const posAttr = ribbonGeo.attributes.position;
+        const baseAttr = ribbonBasePositions;
+        const vertexCount = posAttr.count;
+
+        for (let v = 0; v < vertexCount; v++) {
+          const bx = baseAttr.getX(v);
+          const by = baseAttr.getY(v);
+          const bz = baseAttr.getZ(v);
+
+          // Map vertex polar angle to 128 Web Audio frequency bins
+          const angle = Math.atan2(bz, bx) + Math.PI; // 0 to 2*PI
+          const binIdx = Math.floor((angle / (Math.PI * 2)) * 128) % 128;
+          const freqNorm = (combinedFreq[binIdx] || 0) / 255;
+
+          // Compute 3D audio displacement in the void
+          const radialAmp = 1 + (freqNorm * 0.42 * reactiveLevel) + (smoothedAudio * 0.22);
+          const heightDisp = Math.sin(t * 3.2 + binIdx * 0.18) * 3 + (freqNorm * 26 * reactiveLevel);
+
+          posAttr.setXYZ(v, bx * radialAmp, by + (by > 0 ? heightDisp : -heightDisp), bz * radialAmp);
+        }
+        posAttr.needsUpdate = true;
+
+        // Color & Opacity reactivity in the void
+        ribbonMat.color.lerp(isVoiceActive ? new THREE.Color(0x00f2ff) : targetCol, 0.1);
+        ribbonMat.opacity = Math.min(0.95, (0.42 + smoothedAudio * 0.55) * bloom);
+      }
+
+      // 2. Animate 48 Spectral Equalizer Pillars in the Void
+      pillarMeshes.forEach((pMesh, pIdx) => {
+        const freqIndex = Math.min(127, Math.floor((pIdx / pillarCount) * 124));
+        const freqNorm = combinedFreq ? (combinedFreq[freqIndex] || 0) / 255 : 0;
+        const targetPillarHeight = Math.max(1.2, freqNorm * 42 * reactiveLevel + smoothedAudio * 16);
+        pMesh.scale.y += (targetPillarHeight - pMesh.scale.y) * 0.26;
+
+        // Pillar material color shift matching active palette
+        const mat = pMesh.material as THREE.MeshBasicMaterial;
+        mat.color.lerp(pIdx % 2 === 0 ? targetCol : secondaryCol, 0.1);
+        mat.opacity = Math.min(0.92, (0.32 + freqNorm * 0.65) * bloom);
+      });
+
+      // 3. Shockwave rings pulse outwards into 3D void when voice volume spikes
+      shockwaveRings.forEach((ring, rIdx) => {
+        if (smoothedAudio > 0.11 && ring.opacity <= 0.05) {
+          ring.opacity = Math.min(0.85, smoothedAudio * 1.6);
+          ring.scale = 1 + rIdx * 1.8;
+        }
+
+        if (ring.opacity > 0.02) {
+          ring.scale += ring.speed * (1 + smoothedAudio * 2.2);
+          ring.opacity *= 0.94;
+          ring.mesh.scale.setScalar(ring.scale);
+          (ring.mesh.material as THREE.MeshBasicMaterial).opacity = ring.opacity * bloom;
+          (ring.mesh.material as THREE.MeshBasicMaterial).color.lerp(targetCol, 0.1);
+        } else {
+          ring.opacity = 0;
+          (ring.mesh.material as THREE.MeshBasicMaterial).opacity = 0;
+        }
+      });
+
+      // Key and Rim lights pulse in real-time with audio volume
+      keyLight.intensity = (1.8 + smoothedAudio * 2.4) * bloom;
+      rimLight.intensity = (1.4 + smoothedAudio * 1.8) * bloom;
+
       // Animate Particles with Gravity & Audio reactivity
       const pPosArr = particleField.geometry.attributes.position.array as Float32Array;
       const pColArr = particleField.geometry.attributes.color.array as Float32Array;
@@ -830,7 +978,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       }
 
       // Render 2D Stratum 0 HUD Overlay
-      renderHudCanvas(now, currentEnv, audioBytes, camera, vfsNodes, hoveredNodeId, ledState);
+      renderHudCanvas(now, currentEnv, combinedFreq, camera, vfsNodes, hoveredNodeId, ledState);
 
       renderer.render(scene, camera);
     };
@@ -1148,13 +1296,31 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     }
   };
 
+  const isVideoBackground = envState.youtube?.active && envState.youtube?.displayMode === 'background';
+  const show3DLayer = !isVideoBackground || envState.youtube?.blendWith3D;
+
   return (
-    <div className="fixed inset-0 w-full h-full overflow-hidden select-none bg-[#02050b]" onClick={onSceneClick}>
+    <div
+      className={`fixed inset-0 w-full h-full overflow-hidden select-none transition-colors duration-700 ${
+        isVideoBackground ? 'bg-transparent' : 'bg-[#02050b]'
+      }`}
+      onClick={onSceneClick}
+    >
       {/* Three.js 3D/4D WebGL Canvas Layer */}
-      <div ref={mountRef} className="fixed inset-0 w-full h-full z-0 cursor-default" />
+      <div
+        ref={mountRef}
+        className={`fixed inset-0 w-full h-full z-0 cursor-default transition-opacity duration-700 ${
+          show3DLayer ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      />
 
       {/* 2D Canvas Holographic HUD Overlay */}
-      <canvas ref={hudCanvasRef} className="fixed inset-0 w-full h-full z-10 pointer-events-none" />
+      <canvas
+        ref={hudCanvasRef}
+        className={`fixed inset-0 w-full h-full z-10 pointer-events-none transition-opacity duration-700 ${
+          show3DLayer ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
 
       {/* Photorealistic 3D Earth Overlay (Google Maps Platform) */}
       <EarthNasaOverlay active={envState.topology === 'earth_nasa'} />

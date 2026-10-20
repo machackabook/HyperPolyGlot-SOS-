@@ -87,6 +87,68 @@ export interface EnvironmentState {
   harmonicResonance: '432' | '528' | '963' | 'all';
   mountedDevices: string[];
   rgbLed: RgbLedConfig;
+  youtube: YouTubePlayerState;
+}
+
+export type YouTubeCategory = 'lofi' | 'synthwave' | 'ambient' | 'cyberpunk' | 'space' | 'solfeggio' | 'classical' | 'custom';
+export type YouTubeDisplayMode = 'background' | 'pip' | 'modal' | 'cinema' | 'off';
+
+export interface YouTubeTrack {
+  id: string;
+  title: string;
+  artist: string;
+  category: YouTubeCategory;
+  duration?: string;
+  thumbnail?: string;
+  description?: string;
+}
+
+export interface YouTubePlaylist {
+  id: string;
+  title: string;
+  description: string;
+  category: YouTubeCategory;
+  thumbnail: string;
+  tracks: YouTubeTrack[];
+  isCustom?: boolean;
+  youtubePlaylistId?: string; // YouTube playlist ID (e.g. PL...)
+  createdAt?: string;
+}
+
+export interface GoogleUserProfile {
+  email: string;
+  name: string;
+  picture: string;
+  isAuthenticated: boolean;
+  lastLogin: string;
+  accountType: 'sovereign_operator' | 'google_workspace' | 'guest';
+  preferences: {
+    defaultVideoMode: YouTubeDisplayMode;
+    defaultOpacity: number;
+    defaultBlendWith3D: boolean;
+    autoPlayOnLoad: boolean;
+    harmonicFrequency: '432' | '528' | '963' | 'all';
+    preferredCategory: YouTubeCategory;
+  };
+}
+
+export interface YouTubePlayerState {
+  active: boolean;
+  currentTrack: YouTubeTrack;
+  displayMode: YouTubeDisplayMode;
+  isPlaying: boolean;
+  volume: number; // 0 - 100
+  isMuted: boolean;
+  backgroundOpacity: number; // 0.1 to 1.0
+  blendWith3D: boolean; // overlay Three.js 3D particles over the video
+  showModal: boolean;
+  activePlaylistId: string;
+  currentTrackIndex: number;
+  shuffle: boolean;
+  repeat: boolean;
+  lastCommand?: string;
+  userProfile: GoogleUserProfile;
+  customPlaylists: YouTubePlaylist[];
 }
 
 export interface LinksBrowserPage {

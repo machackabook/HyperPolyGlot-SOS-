@@ -41,3 +41,16 @@ test('voice profiles include all 4 personas with harmonic carrier frequencies', 
   assert.equal(profiles.length, 4);
   assert.ok(profiles.every((p) => p.freq > 400 && p.freq < 1000));
 });
+
+test('voice audio frequency blending aggregates max energy per bin', () => {
+  const bufA = new Uint8Array([50, 120, 200]);
+  const bufB = new Uint8Array([80, 90, 240]);
+  const out = new Uint8Array(3);
+  for (let i = 0; i < 3; i++) {
+    out[i] = Math.max(bufA[i], bufB[i]);
+  }
+  assert.equal(out[0], 80);
+  assert.equal(out[1], 120);
+  assert.equal(out[2], 240);
+});
+

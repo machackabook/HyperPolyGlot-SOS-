@@ -9,7 +9,7 @@ import { EnvironmentState } from '../types';
 
 export interface CommandSuggestion {
   command: string;
-  category: 'System' | 'VFS' | '3D Visuals' | 'AI & Voice' | 'Satcom' | 'Swarm' | 'Fintech' | 'Quine' | 'Custom' | 'D3 Stream' | 'Network' | 'Mount' | 'Environment';
+  category: 'System' | 'VFS' | '3D Visuals' | 'AI & Voice' | 'Satcom' | 'Swarm' | 'Fintech' | 'Quine' | 'Custom' | 'D3 Stream' | 'Network' | 'Mount' | 'Environment' | 'Audio';
   description: string;
   badge: string;
   badgeColor?: string;
@@ -235,6 +235,28 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
 
   // Quine
   { command: 'quine export', category: 'Quine', description: 'Export self-replicating standalone offline HTML Quine', badge: 'QUINE' },
+
+  // YouTube Neural Music & Dynamic Playlists (Google Auth Linked)
+  { command: 'youtube play synthwave', category: 'Audio', description: 'Stream Synthwave retro beats & transition to background video', badge: 'YOUTUBE' },
+  { command: 'youtube play lofi', category: 'Audio', description: 'Stream Lofi Girl beats to study & relax in background canvas', badge: 'YOUTUBE' },
+  { command: 'youtube play cyberpunk', category: 'Audio', description: 'Stream Blade Runner 2049 night city ambient synthwave', badge: 'YOUTUBE' },
+  { command: 'youtube play space', category: 'Audio', description: 'Stream deep cosmos orbital ambient soundscapes', badge: 'YOUTUBE' },
+  { command: 'youtube play solfeggio', category: 'Audio', description: 'Stream 432Hz & 963Hz miracle harmonic resonance frequencies', badge: 'YOUTUBE' },
+  { command: 'youtube play classical', category: 'Audio', description: 'Stream acoustic classical piano & strings suite', badge: 'YOUTUBE' },
+  { command: 'youtube playlist synthwave', category: 'Audio', description: 'Select dynamic Synthwave video playlist for background visualizer', badge: 'PLAYLIST' },
+  { command: 'youtube playlist lofi', category: 'Audio', description: 'Select dynamic Lofi video playlist for background visualizer', badge: 'PLAYLIST' },
+  { command: 'youtube playlist space', category: 'Audio', description: 'Select dynamic Deep Space video playlist for background visualizer', badge: 'PLAYLIST' },
+  { command: 'youtube playlist solfeggio', category: 'Audio', description: 'Select dynamic 432Hz/963Hz Solfeggio video playlist', badge: 'PLAYLIST' },
+  { command: 'youtube playlist classical', category: 'Audio', description: 'Select dynamic Classical Masterworks video playlist', badge: 'PLAYLIST' },
+  { command: 'youtube playlists', category: 'Audio', description: 'List all dynamic curated & custom YouTube video playlists', badge: 'PLAYLIST' },
+  { command: 'youtube modal', category: 'Audio', description: 'Open YouTube Music Hub (Dynamic stream selection & playlist creator)', badge: 'YOUTUBE' },
+  { command: 'youtube bg', category: 'Audio', description: 'Transition video player to 100% full background rendering canvas', badge: 'BG-VID' },
+  { command: 'youtube pip', category: 'Audio', description: 'Transition video player to floating picture-in-picture window', badge: 'PIP' },
+  { command: 'youtube blend', category: 'Audio', description: 'Toggle 3D visualizer canvas blending over background video', badge: 'BLEND' },
+  { command: 'youtube auth', category: 'Audio', description: 'Inspect Google Auth profile and system customization preferences', badge: 'GOOGLE' },
+  { command: 'youtube login', category: 'Audio', description: 'Sign in natively with Google Account for system customizations', badge: 'GOOGLE' },
+  { command: 'music play synthwave', category: 'Audio', description: 'Stream synthwave music in background video mode', badge: 'MUSIC' },
+  { command: 'music modal', category: 'Audio', description: 'Open YouTube music and playlist control center', badge: 'MUSIC' },
 ];
 
 export const CONTEXT_PARAM_EXPANSIONS: Record<
@@ -266,8 +288,11 @@ export const CONTEXT_PARAM_EXPANSIONS: Record<
     { param: 'profile quantum', desc: 'Quantum Echo (528 Hz, harmonic shimmer)', badge: 'VOICE', cat: 'AI & Voice' },
     { param: 'profile cyber', desc: 'Cyber Pulse (963 Hz, robotic vocoder)', badge: 'VOICE', cat: 'AI & Voice' },
     { param: 'profile tranquil', desc: 'Tranquil Aura (639 Hz, meditative stasis)', badge: 'VOICE', cat: 'AI & Voice' },
+    { param: 'test', desc: 'Test real-time AI voice response & visual waveform pulse in 3D void', badge: 'TEST', cat: 'AI & Voice' },
+    { param: 'speak "Hello sovereign operator"', desc: 'Vocalize text with real-time waveform oscillation', badge: 'SPEAK', cat: 'AI & Voice' },
     { param: 'on', desc: 'Enable spoken AI voice responses', badge: 'VOICE', cat: 'AI & Voice' },
     { param: 'off', desc: 'Mute spoken AI voice audio responses', badge: 'VOICE', cat: 'AI & Voice' },
+    { param: 'stop', desc: 'Interrupt and stop active AI speech output', badge: 'MUTE', cat: 'AI & Voice' },
   ],
   ambient: [
     { param: 'on', desc: 'Enable dynamic Web Audio ambient soundscape', badge: 'AUDIO', cat: 'AI & Voice' },
@@ -297,9 +322,59 @@ export const CONTEXT_PARAM_EXPANSIONS: Record<
     { param: 'burst', desc: 'Trigger high-velocity packet supernova', badge: 'D3', cat: 'D3 Stream' },
   ],
   dock: [
+    { param: 'center', desc: 'Center terminal workstation with expanded visibility', badge: 'CENTER', cat: 'System' },
     { param: 'bottom', desc: 'Pin terminal to bottom viewport dock', badge: 'LAYOUT', cat: 'System' },
     { param: 'float', desc: 'Switch terminal into floating draggable window', badge: 'LAYOUT', cat: 'System' },
     { param: 'fullscreen', desc: 'Expand terminal across full screen', badge: 'LAYOUT', cat: 'System' },
+    { param: 'clear', desc: 'Toggle ultra-transparent clear glass mode', badge: 'GLASS', cat: 'System' },
+  ],
+  youtube: [
+    { param: 'play synthwave', desc: 'Stream live synthwave chill retro beats', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play lofi', desc: 'Stream Lofi Girl chill beats', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play cyberpunk', desc: 'Stream Blade Runner 2049 night city ambient', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play space', desc: 'Stream deep cosmos orbital ambient', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play solfeggio', desc: 'Stream 432Hz & 963Hz miracle frequencies', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play classical', desc: 'Stream Bach & Chopin classical focus', badge: 'PLAY', cat: 'Audio' },
+    { param: 'playlist synthwave', desc: 'Stream dynamic Synthwave video playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlist lofi', desc: 'Stream dynamic Lo-Fi video playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlist space', desc: 'Stream dynamic Deep Space video playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlist solfeggio', desc: 'Stream dynamic Solfeggio frequency playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlist classical', desc: 'Stream dynamic Classical Masterworks playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlists', desc: 'List all dynamic curated and custom playlists', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'bg', desc: 'Transition video to 100% full background canvas', badge: 'BG-VID', cat: 'Audio' },
+    { param: 'pip', desc: 'Transition video to floating picture-in-picture', badge: 'PIP', cat: 'Audio' },
+    { param: 'blend', desc: 'Toggle 3D visualizer canvas blending over video', badge: 'BLEND', cat: 'Audio' },
+    { param: 'pause', desc: 'Pause current YouTube video/audio stream', badge: 'PAUSE', cat: 'Audio' },
+    { param: 'resume', desc: 'Resume current YouTube stream', badge: 'RESUME', cat: 'Audio' },
+    { param: 'next', desc: 'Skip to next track in active playlist', badge: 'NEXT', cat: 'Audio' },
+    { param: 'prev', desc: 'Return to previous track in active playlist', badge: 'PREV', cat: 'Audio' },
+    { param: 'modal', desc: 'Open YouTube Music & Playlist Hub overlay', badge: 'HUB', cat: 'Audio' },
+    { param: 'auth', desc: 'Inspect Google Auth profile and system customizations', badge: 'GOOGLE', cat: 'Audio' },
+    { param: 'login', desc: 'Sign in with Google Account natively', badge: 'GOOGLE', cat: 'Audio' },
+    { param: 'opacity 0.85', desc: 'Set background video opacity (0.1 - 1.0)', badge: 'OPACITY', cat: 'Audio' },
+    { param: 'volume 75', desc: 'Set YouTube audio volume level (0 - 100)', badge: 'VOL', cat: 'Audio' },
+  ],
+  yt: [
+    { param: 'play synthwave', desc: 'Stream live synthwave chill retro beats', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play lofi', desc: 'Stream Lofi Girl chill beats', badge: 'PLAY', cat: 'Audio' },
+    { param: 'playlist synthwave', desc: 'Stream dynamic Synthwave video playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlist lofi', desc: 'Stream dynamic Lo-Fi video playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'bg', desc: 'Transition video to full background canvas', badge: 'BG-VID', cat: 'Audio' },
+    { param: 'pip', desc: 'Transition video to floating PiP', badge: 'PIP', cat: 'Audio' },
+    { param: 'modal', desc: 'Open YouTube Music Hub', badge: 'HUB', cat: 'Audio' },
+    { param: 'auth', desc: 'View Google Auth status & customizations', badge: 'GOOGLE', cat: 'Audio' },
+  ],
+  music: [
+    { param: 'play synthwave', desc: 'Stream live synthwave chill retro beats', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play lofi', desc: 'Stream Lofi Girl chill beats', badge: 'PLAY', cat: 'Audio' },
+    { param: 'play space', desc: 'Stream deep cosmos orbital ambient', badge: 'PLAY', cat: 'Audio' },
+    { param: 'playlist synthwave', desc: 'Stream dynamic Synthwave playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlist lofi', desc: 'Stream dynamic Lo-Fi playlist', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'playlists', desc: 'List all dynamic video playlists', badge: 'PLAYLIST', cat: 'Audio' },
+    { param: 'modal', desc: 'Open YouTube Music Hub', badge: 'HUB', cat: 'Audio' },
+    { param: 'bg', desc: 'Transition video to full background canvas', badge: 'BG-VID', cat: 'Audio' },
+    { param: 'pip', desc: 'Transition video to floating PiP', badge: 'PIP', cat: 'Audio' },
+    { param: 'auth', desc: 'View Google Auth status & customizations', badge: 'GOOGLE', cat: 'Audio' },
   ],
   rgbled: [
     { param: 'on', desc: 'Enable dynamic RGB-LED HSL% Hue Gradient Engine', badge: 'RGB-LED', cat: '3D Visuals' },
@@ -733,6 +808,96 @@ function buildStateAdaptiveSuggestions(context?: AutocompleteContext): CommandSu
     });
   }
 
+  // 6.5 YouTube Neural Music & Background Video Transition
+  if (!env.youtube?.active) {
+    list.push({
+      command: 'youtube play synthwave',
+      category: 'Audio',
+      description: 'Stream live Synthwave retro chill beats & transition to background video',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 235,
+      isEnvironmentAdaptive: true,
+      statusHint: 'YouTube Idle',
+    });
+    list.push({
+      command: 'youtube play lofi',
+      category: 'Audio',
+      description: 'Stream Lofi Girl beats to study & relax in background canvas',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 230,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'youtube modal',
+      category: 'Audio',
+      description: 'Open YouTube Neural Music Hub to dynamically select stream',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 228,
+      isEnvironmentAdaptive: true,
+    });
+  } else {
+    list.push({
+      command: env.youtube.isPlaying ? 'youtube pause' : 'youtube resume',
+      category: 'Audio',
+      description: env.youtube.isPlaying ? 'Pause YouTube music video playback' : 'Resume YouTube music video playback',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 230,
+      isEnvironmentAdaptive: true,
+      statusHint: env.youtube.isPlaying ? 'Playing' : 'Paused',
+    });
+    list.push({
+      command: 'youtube bg',
+      category: 'Audio',
+      description: 'Toggle YouTube video 100% full background rendering transition',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 228,
+      isEnvironmentAdaptive: true,
+      statusHint: env.youtube.displayMode.toUpperCase(),
+    });
+    list.push({
+      command: 'youtube blend',
+      category: 'Audio',
+      description: 'Toggle 3D visualizer canvas blending directly over background video',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 225,
+      isEnvironmentAdaptive: true,
+      statusHint: env.youtube.blendWith3D ? 'Blend ON' : 'Blend OFF',
+    });
+    list.push({
+      command: 'youtube next',
+      category: 'Audio',
+      description: 'Skip to next curated stream in YouTube playlist',
+      badge: 'YOUTUBE',
+      badgeColor: '#ef4444',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+  }
+  list.push({
+    command: 'youtube play cyberpunk',
+    category: 'Audio',
+    description: 'Stream Blade Runner 2049 night city ambient synthwave',
+    badge: 'YOUTUBE',
+    badgeColor: '#ef4444',
+    score: 215,
+    isEnvironmentAdaptive: true,
+  });
+  list.push({
+    command: 'youtube play interstellar',
+    category: 'Audio',
+    description: 'Stream Hans Zimmer Interstellar epic pipe organ suite',
+    badge: 'YOUTUBE',
+    badgeColor: '#ef4444',
+    score: 215,
+    isEnvironmentAdaptive: true,
+  });
+
   // 7. Terminal Dock Layout, Clear Mode & Canvas Minimize
   if (env.terminalDock !== 'center') {
     list.push({
@@ -834,8 +999,11 @@ export function getCommandSuggestions(
   const seen = new Set<string>();
   const candidates: CommandSuggestion[] = [];
 
-  // When query is empty, return the highest-scoring contextual suggestions directly
+  // When query is empty, return contextual suggestions if an active environment/mount context was provided
   if (!query || !query.trim()) {
+    if (!context.envState && !context.mountedDevices) {
+      return [];
+    }
     // Pick the most immediately useful commands for the current environment & mounts
     for (const item of stateAdaptiveList) {
       if (!seen.has(item.command.toLowerCase())) {
