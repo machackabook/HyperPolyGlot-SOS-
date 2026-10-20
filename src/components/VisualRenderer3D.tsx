@@ -6,6 +6,7 @@ import { vfs } from '../services/vfsService';
 import { navigatorService } from '../services/navigatorService';
 import { geoNexusService, GeoTelemetry } from '../services/geoNexusService';
 import { EarthNasaOverlay } from './EarthNasaOverlay';
+import { computeRgbLedState } from '../services/colorProfileService';
 import { useState } from 'react';
 
 interface VisualRenderer3DProps {
@@ -670,13 +671,26 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       }
 
       // Primary color update for active material
-      const targetCol = new THREE.Color(currentEnv.primaryColor);
-      const secondaryCol = new THREE.Color(currentEnv.secondaryColor);
       const bloom = currentEnv.bloomIntensity;
+      const ledState = currentEnv.rgbLed ? computeRgbLedState(t, currentEnv.rgbLed, smoothedAudio) : null;
+      const targetCol = new THREE.Color(ledState ? ledState.primaryHex : currentEnv.primaryColor);
+      const secondaryCol = new THREE.Color(ledState ? ledState.secondaryHex : currentEnv.secondaryColor);
 
-      // Modulate lights
-      keyLight.intensity = 1.8 * bloom;
-      rimLight.intensity = 1.4 * bloom;
+      // Modulate lights & scene atmosphere
+      if (ledState) {
+        keyLight.color.lerp(new THREE.Color(ledState.primaryHex), 0.1);
+        rimLight.color.lerp(new THREE.Color(ledState.secondaryHex), 0.1);
+        ambientLight.color.lerp(new THREE.Color(ledState.ambientHex), 0.08);
+        ambientLight.intensity = 0.5 * ledState.intensity;
+        keyLight.intensity = 1.8 * bloom * ledState.intensity;
+        rimLight.intensity = 1.4 * bloom * ledState.intensity;
+        if (scene.fog) {
+          scene.fog.color.lerp(new THREE.Color(ledState.ambientHex), 0.05);
+        }
+      } else {
+        keyLight.intensity = 1.8 * bloom;
+        rimLight.intensity = 1.4 * bloom;
+      }
 
       // Animate active topology
       if (currentEnv.topology === 'torus') {
@@ -782,10 +796,17 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
         pPosArr[i3 + 1] = y;
         pPosArr[i3 + 2] = z;
 
-        // Color modulation
-        pColArr[i3] = targetCol.r * (0.8 + smoothedAudio * 0.5) * bloom;
-        pColArr[i3 + 1] = targetCol.g * (0.8 + smoothedAudio * 0.5) * bloom;
-        pColArr[i3 + 2] = secondaryCol.b * (0.8 + smoothedAudio * 0.5) * bloom;
+        // Color modulation with high-end gamut dispersion
+        if (ledState && i % 3 === 0) {
+          const tertCol = new THREE.Color(ledState.tertiaryHex);
+          pColArr[i3] = tertCol.r * (0.8 + smoothedAudio * 0.5) * bloom;
+          pColArr[i3 + 1] = tertCol.g * (0.8 + smoothedAudio * 0.5) * bloom;
+          pColArr[i3 + 2] = tertCol.b * (0.8 + smoothedAudio * 0.5) * bloom;
+        } else {
+          pColArr[i3] = targetCol.r * (0.8 + smoothedAudio * 0.5) * bloom;
+          pColArr[i3 + 1] = targetCol.g * (0.8 + smoothedAudio * 0.5) * bloom;
+          pColArr[i3 + 2] = secondaryCol.b * (0.8 + smoothedAudio * 0.5) * bloom;
+        }
       }
       particleField.geometry.attributes.position.needsUpdate = true;
       particleField.geometry.attributes.color.needsUpdate = true;
@@ -809,7 +830,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       }
 
       // Render 2D Stratum 0 HUD Overlay
-      renderHudCanvas(now, currentEnv, audioBytes, camera, vfsNodes, hoveredNodeId);
+      renderHudCanvas(now, currentEnv, audioBytes, camera, vfsNodes, hoveredNodeId, ledState);
 
       renderer.render(scene, camera);
     };
@@ -848,7 +869,8 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     audioBytes: Uint8Array | null, 
     camera: THREE.Camera,
     vfsNodes: VfsStarNode[],
-    hoveredNodeId: string | null
+    hoveredNodeId: string | null,
+    ledState: ReturnType<typeof computeRgbLedState> | null
   ) => {
     const canvas = hudCanvasRef.current;
     if (!canvas) return;
@@ -866,6 +888,83 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
     const cx = w / 2;
     const cy = h / 2;
+
+    const activePrimary = ledState ? ledState.primaryHex : env.primaryColor;
+    const activeSecondary = ledState ? ledState.secondaryHex : env.secondaryColor;
+    const activeTertiary = ledState ? ledState.tertiaryHex : '#fbbf24';
+
+    // 0. Top Edge RGB-LED HSL% Hue Gradient Spectrum Ribbon
+    if (ledState) {
+      // 1. High-fidelity spectral ribbon across top viewport
+      const ribbonGrad = ctx.createLinearGradient(0, 0, w, 0);
+      if (ledState.palette && ledState.palette.length > 1) {
+        ledState.palette.forEach((col, idx) => {
+          ribbonGrad.addColorStop(idx / (ledState.palette.length - 1), col);
+        });
+      } else {
+        ribbonGrad.addColorStop(0, ledState.primaryHex);
+        ribbonGrad.addColorStop(0.5, ledState.secondaryHex);
+        ribbonGrad.addColorStop(1, ledState.tertiaryHex);
+      }
+
+      ctx.fillStyle = ribbonGrad;
+      ctx.fillRect(0, 0, w, 3);
+
+      // Ambient glow reflection right beneath ribbon
+      const glowGrad = ctx.createLinearGradient(0, 3, 0, 16);
+      glowGrad.addColorStop(0, `${activePrimary}44`);
+      glowGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGrad;
+      ctx.fillRect(0, 3, w, 13);
+
+      // Live needle indicator pip for current Hue%
+      const pipX = (ledState.currentHuePercent / 100) * w;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(pipX, 3.5, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = activePrimary;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Top-Center Cybernetic RGB-LED HUD Chip
+      const chipW = 380;
+      const chipH = 22;
+      const chipX = cx - chipW / 2;
+      const chipY = 8;
+
+      ctx.fillStyle = 'rgba(2, 6, 18, 0.75)';
+      ctx.strokeStyle = `${activePrimary}44`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(chipX, chipY, chipW, chipH, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Chip Text
+      ctx.font = 'bold 8.5px "Orbitron", sans-serif';
+      ctx.fillStyle = activePrimary;
+      ctx.textAlign = 'left';
+      ctx.fillText(`RGB-LED: ${ledState.profile.id}`, chipX + 10, chipY + 14);
+
+      ctx.font = '8px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`HSL: ${ledState.currentHuePercent.toFixed(1)}% (${Math.round(ledState.activeHueDeg)}°)`, chipX + 120, chipY + 14);
+      ctx.fillText(`MODE: ${env.rgbLed.mode.toUpperCase()}`, chipX + 230, chipY + 14);
+
+      // Render profile gamut anchor gems inside chip
+      if (ledState.palette) {
+        ledState.palette.forEach((pCol, i) => {
+          ctx.fillStyle = pCol;
+          ctx.beginPath();
+          ctx.arc(chipX + chipW - 60 + i * 11, chipY + 11, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff55';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        });
+      }
+    }
 
     // VFS Node Labels (Project 3D to 2D)
     if (env.topology === 'galaxy_vfs') {
@@ -891,12 +990,12 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
             // Hover highlight effect
             if (isHovered) {
               ctx.shadowBlur = 10;
-              ctx.shadowColor = env.primaryColor;
+              ctx.shadowColor = activePrimary;
             } else {
               ctx.shadowBlur = 0;
             }
 
-            ctx.fillStyle = `${node.type === 'directory' ? env.secondaryColor : '#ffffff'}${hexOpacity}`;
+            ctx.fillStyle = `${node.type === 'directory' ? activeSecondary : '#ffffff'}${hexOpacity}`;
             const fontSize = isHovered ? 18 : Math.max(10, 16 - dist / 30);
             ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
             ctx.fillText(node.label.toUpperCase(), x, y - 10);
@@ -904,7 +1003,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
             // Show full path on proximity or hover
             if (dist < 80 || isHovered) {
               ctx.font = '10px "JetBrains Mono", monospace';
-              ctx.fillStyle = `${env.primaryColor}${Math.floor(opacity * 180).toString(16).padStart(2, '0')}`;
+              ctx.fillStyle = `${activePrimary}${Math.floor(opacity * 180).toString(16).padStart(2, '0')}`;
               ctx.fillText(node.path, x, y + 10);
             }
             
@@ -915,13 +1014,13 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     }
 
     // Outer cybernetic radar rings
-    ctx.strokeStyle = `${env.primaryColor}22`;
+    ctx.strokeStyle = `${activePrimary}22`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(cx, cy, Math.min(w, h) * 0.42, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.strokeStyle = `${env.secondaryColor}18`;
+    ctx.strokeStyle = `${activeSecondary}18`;
     ctx.beginPath();
     ctx.arc(cx, cy, Math.min(w, h) * 0.28, 0, Math.PI * 2);
     ctx.stroke();
@@ -929,22 +1028,29 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     // Telemetry Oscilloscope HUD (Bottom Left)
     if (env.d3Stream.active) {
       const hist = telemetryHistory.current;
-      const boxW = 200;
+      const boxW = 210;
       const boxH = 120;
       const bx = 24;
       const by = h - boxH - 70; // Positioned above the audio wave
 
       // Backdrop
-      ctx.fillStyle = 'rgba(3, 8, 20, 0.85)';
-      ctx.strokeStyle = `${env.primaryColor}55`;
+      ctx.fillStyle = 'rgba(3, 8, 20, 0.88)';
+      ctx.strokeStyle = `${activePrimary}55`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(bx, by, boxW, boxH, 12);
       ctx.fill();
       ctx.stroke();
 
+      // Top accent strip on oscilloscope box
+      const boxStrip = ctx.createLinearGradient(bx, by, bx + boxW, by);
+      boxStrip.addColorStop(0, activePrimary);
+      boxStrip.addColorStop(1, activeSecondary);
+      ctx.fillStyle = boxStrip;
+      ctx.fillRect(bx + 12, by, boxW - 24, 2);
+
       // Grid lines inside scope
-      ctx.strokeStyle = `${env.primaryColor}11`;
+      ctx.strokeStyle = `${activePrimary}11`;
       ctx.beginPath();
       for (let i = 1; i < 4; i++) {
         const gy = by + (boxH / 4) * i;
@@ -955,9 +1061,9 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
       // Title & Live Metrics
       ctx.font = 'bold 9px "Orbitron", sans-serif';
-      ctx.fillStyle = env.primaryColor;
+      ctx.fillStyle = activePrimary;
       ctx.textAlign = 'left';
-      ctx.fillText('LIVE TELEMETRY STREAM', bx + 12, by + 18);
+      ctx.fillText(`TELEMETRY // ${ledState ? ledState.profile.id : 'STD'}`, bx + 12, by + 18);
 
       const drawScope = (data: number[], color: string, label: string, yOffset: number, maxVal: number, unit: string) => {
         const latest = data[data.length - 1];
@@ -979,22 +1085,27 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
         ctx.stroke();
       };
 
-      // Draw layered waves
-      drawScope(hist.packets, env.primaryColor, 'PKTS', 32, 5000, '/s');
-      drawScope(hist.throughput, env.secondaryColor, 'TRPT', 44, 1000, 'MB');
-      drawScope(hist.jitter, '#fbbf24', 'JITR', 56, 5, 'ms');
+      // Draw layered waves with RGB-LED profile colors
+      drawScope(hist.packets, activePrimary, 'PKTS', 32, 5000, '/s');
+      drawScope(hist.throughput, activeSecondary, 'TRPT', 44, 1000, 'MB');
+      drawScope(hist.jitter, activeTertiary, 'JITR', 56, 5, 'ms');
     }
 
     // Live Audio Spectrum Oscilloscope Wave at bottom
     if (audioBytes && audioBytes.length > 0) {
-      ctx.strokeStyle = env.primaryColor;
-      ctx.lineWidth = 1.5;
+      const audioGrad = ctx.createLinearGradient(0, h - 50, w, h);
+      audioGrad.addColorStop(0, activePrimary);
+      audioGrad.addColorStop(0.5, activeSecondary);
+      audioGrad.addColorStop(1, activeTertiary);
+
+      ctx.strokeStyle = audioGrad;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       const sliceWidth = w / audioBytes.length;
       let x = 0;
       for (let i = 0; i < audioBytes.length; i++) {
         const v = audioBytes[i] / 255.0;
-        const y = h - 12 - v * 40;
+        const y = h - 12 - v * 42;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
         x += sliceWidth;
@@ -1004,32 +1115,36 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
     // Top Right Telemetry Stamp
     ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillStyle = `${env.primaryColor}cc`;
+    ctx.fillStyle = `${activePrimary}cc`;
     ctx.textAlign = 'right';
     ctx.fillText(`TOPOLOGY: ${env.topology.toUpperCase()}`, w - 24, 28);
-    ctx.fillStyle = `${env.secondaryColor}bb`;
+    ctx.fillStyle = `${activeSecondary}bb`;
     ctx.fillText(`SENTIMENT: ${env.sentiment.toUpperCase()}`, w - 24, 44);
     ctx.fillStyle = '#64748b';
     ctx.fillText(`G4: ${env.gravity.toFixed(2)} | V: ${env.speed.toFixed(2)}x`, w - 24, 60);
+    if (ledState) {
+      ctx.fillStyle = `${activeTertiary}bb`;
+      ctx.fillText(`RGB-LED: ${ledState.profile.id} [${ledState.currentHuePercent.toFixed(0)}%]`, w - 24, 76);
+    }
 
     // Physical Geolocation Tracker (Top Left)
     if (geoTelemetry.status === 'active') {
       ctx.textAlign = 'left';
-      ctx.fillStyle = `${env.primaryColor}88`;
+      ctx.fillStyle = `${activePrimary}88`;
       ctx.font = 'bold 9px "Orbitron", sans-serif';
       ctx.fillText('PHYSICAL NODE TRACKER', 24, 28);
       ctx.font = '8px "JetBrains Mono", monospace';
       ctx.fillStyle = '#ffffffaa';
       ctx.fillText(`LAT: ${geoTelemetry.lat.toFixed(6)}`, 24, 40);
       ctx.fillText(`LNG: ${geoTelemetry.lng.toFixed(6)}`, 24, 50);
-      ctx.fillStyle = `${env.secondaryColor}aa`;
+      ctx.fillStyle = `${activeSecondary}aa`;
       ctx.fillText(`PLUS: ${geoTelemetry.plusCode}`, 24, 60);
     }
 
     // Solfeggio indicator
     if (env.solfeggio963) {
       ctx.fillStyle = '#10b981';
-      ctx.fillText('963 HZ SOLFEGGIO: ACTIVE', w - 24, 76);
+      ctx.fillText('963 HZ SOLFEGGIO: ACTIVE', w - 24, ledState ? 92 : 76);
     }
   };
 

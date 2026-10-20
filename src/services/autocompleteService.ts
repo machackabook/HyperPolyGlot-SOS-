@@ -1,16 +1,64 @@
 /**
  * Autocomplete Service for HyperTerminal Polyglot Quine OS
- * Computes intelligent command suggestions, subcommand expansions, and VFS file completions.
+ * Computes intelligent command suggestions, dynamic expansions, and VFS file completions
+ * based on the current EnvironmentState (topology, sentiment, RGB-LED, ambient audio, mic)
+ * and mounted device paths (/mnt/nexus_drive, /mnt/recovery, etc.).
  */
+
+import { EnvironmentState } from '../types';
 
 export interface CommandSuggestion {
   command: string;
-  category: 'System' | 'VFS' | '3D Visuals' | 'AI & Voice' | 'Satcom' | 'Swarm' | 'Fintech' | 'Quine' | 'Custom' | 'D3 Stream' | 'Network';
+  category: 'System' | 'VFS' | '3D Visuals' | 'AI & Voice' | 'Satcom' | 'Swarm' | 'Fintech' | 'Quine' | 'Custom' | 'D3 Stream' | 'Network' | 'Mount' | 'Environment';
   description: string;
   badge: string;
   badgeColor?: string;
   score: number;
+  isEnvironmentAdaptive?: boolean;
+  isMountedPath?: boolean;
+  statusHint?: string;
 }
+
+export interface AutocompleteContext {
+  envState?: EnvironmentState;
+  mountedDevices?: string[];
+  vfsFiles?: string[];
+  cwd?: string;
+  isMicListening?: boolean;
+}
+
+export const TOPOLOGY_LABELS: Record<string, string> = {
+  torus: 'Neuti-ba Kerr Torus Knot with plasma wireframe',
+  tesseract: '4D Hypercube wireframe via Givens rotations',
+  singularity: 'Gravitational Singularity Core & Accretion Disc',
+  neural: 'Polymorphic Neural synaptic axon network',
+  galaxy: '7-Galaxy relativistic orbital frame-dragging',
+  spindle: 'Actuating quantum spindle turning with 33.3ms pulse',
+  dna: 'Algorithmic double-helix rotating strands',
+  galaxy_vfs: 'Filesystem Galaxy with interactive node traversal (WASD)',
+  earth_nasa: 'Photorealistic 3D Earth space-to-surface descent (Google Maps)',
+};
+
+export const SENTIMENT_LABELS: Record<string, string> = {
+  analytical: 'Cyan & Violet balanced crystal physics (432Hz)',
+  energetic: 'Golden Amber & Magenta high-energy flare (528Hz)',
+  alarm: 'Crimson Red warning horizon with high turbulence',
+  tranquil: 'Emerald Green harmonic wave stasis',
+  cosmic: 'Deep Purple relativistic frame dragging (963Hz)',
+  chaos: 'Chromatic RGB jitter and particle dispersion',
+  creative: 'Warm Purple & Magenta aesthetic physics with long particle trails',
+};
+
+export const COLOR_PROFILE_LABELS: Record<string, string> = {
+  ACEScg: 'Academy Color Encoding System AP1 Primaries',
+  'DCI-P3': 'SMPTE DCI-P3 Theatrical Cinema Standard',
+  'Rec.2020': 'ITU-R BT.2020 Laser Ultra HD HDR Gamut',
+  'QD-OLED': 'Quantum Dot Direct RGB Micro-Spectral Emission',
+  'Arri-Filmic': 'ARRI LogC4 Wide Gamut 4 Filmic Roll-off',
+  'Cyber-Neon': 'Cyber-Neon Tokyo Lux High-Contrast Laser',
+  'Aurora-HSL': 'Aurora Borealis Geomagnetic Plasma Ionization',
+  Bioluminescence: 'Bathypelagic Abyssal Photophore Emission',
+};
 
 export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   // System & Terminal
@@ -68,6 +116,24 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'burst', category: '3D Visuals', description: 'Trigger energetic particle supernova wave shockwave', badge: 'FX' },
   { command: 'calm', category: '3D Visuals', description: 'Stabilize background visual into low-frequency harmonic stasis', badge: 'FX' },
   { command: 'shatter', category: '3D Visuals', description: 'Inject catastrophic high-frequency resonance distortion', badge: 'FX' },
+
+  // RGB-LED HSL Engine & Profiles
+  { command: 'rgbled on', category: '3D Visuals', description: 'Enable dynamic RGB-LED HSL% Hue Gradient Engine', badge: 'RGB-LED' },
+  { command: 'rgbled off', category: '3D Visuals', description: 'Disable RGB-LED engine (revert to static environment colors)', badge: 'RGB-LED' },
+  { command: 'rgbled status', category: '3D Visuals', description: 'Display live RGB-LED telemetry, HSL%, active profile and gamut anchors', badge: 'RGB-LED' },
+  { command: 'rgbled hue 50%', category: '3D Visuals', description: 'Set HSL hue percentage (0% - 100% or 0° - 360°)', badge: 'RGB-LED' },
+  { command: 'rgbled mode cycle', category: '3D Visuals', description: 'Set modulation mode to smooth continuous 360° color wheel cycle', badge: 'RGB-LED' },
+  { command: 'rgbled mode pulse', category: '3D Visuals', description: 'Set modulation mode to breathing sinusoidal HSL hue oscillation', badge: 'RGB-LED' },
+  { command: 'rgbled mode audio', category: '3D Visuals', description: 'Set modulation mode to audio-reactive chromatic flare', badge: 'RGB-LED' },
+  { command: 'rgbled menu', category: '3D Visuals', description: 'Open high-end color profile matrix GUI', badge: 'RGB-LED' },
+  { command: 'profile ACEScg', category: '3D Visuals', description: 'Switch to Academy Color Encoding System AP1 Wide Gamut standard', badge: 'COLOR' },
+  { command: 'profile DCI-P3', category: '3D Visuals', description: 'Switch to SMPTE DCI-P3 Theatrical Cinema wide color gamut', badge: 'COLOR' },
+  { command: 'profile Rec.2020', category: '3D Visuals', description: 'Switch to ITU-R BT.2020 Ultra HD HDR pure laser gamut', badge: 'COLOR' },
+  { command: 'profile QD-OLED', category: '3D Visuals', description: 'Switch to Quantum Dot Direct RGB micro-spectral emission profile', badge: 'COLOR' },
+  { command: 'profile Arri-Filmic', category: '3D Visuals', description: 'Switch to ARRI LogC4 Wide Gamut 4 Filmic Roll-off standard', badge: 'COLOR' },
+  { command: 'profile Cyber-Neon', category: '3D Visuals', description: 'Switch to Cyber-Neon Tokyo Lux hyper-saturated laser spectrum', badge: 'COLOR' },
+  { command: 'profile Aurora-HSL', category: '3D Visuals', description: 'Switch to Aurora Borealis geomagnetic plasma atmospheric shimmer', badge: 'COLOR' },
+  { command: 'profile Bioluminescence', category: '3D Visuals', description: 'Switch to Bathypelagic abyssal photophore emission gamut', badge: 'COLOR' },
 
   // AI & Voice
   { command: 'mic on', category: 'AI & Voice', description: 'Enable microphone audio input for real-time border waveform & voice commands', badge: 'MIC' },
@@ -193,6 +259,7 @@ export const CONTEXT_PARAM_EXPANSIONS: Record<
     { param: 'tranquil', desc: 'Emerald Green harmonic wave stasis', badge: 'MOOD', cat: '3D Visuals' },
     { param: 'cosmic', desc: 'Deep Purple relativistic frame dragging (963Hz)', badge: 'MOOD', cat: '3D Visuals' },
     { param: 'chaos', desc: 'Chromatic RGB jitter and particle dispersion', badge: 'MOOD', cat: '3D Visuals' },
+    { param: 'creative', desc: 'Warm Purple & Magenta aesthetic physics', badge: 'MOOD', cat: '3D Visuals' },
   ],
   voice: [
     { param: 'profile sovereign', desc: 'Sovereign Core (432 Hz, authoritative)', badge: 'VOICE', cat: 'AI & Voice' },
@@ -229,83 +296,614 @@ export const CONTEXT_PARAM_EXPANSIONS: Record<
     { param: 'panel', desc: 'Toggle D3 telemetry HUD control panel', badge: 'D3', cat: 'D3 Stream' },
     { param: 'burst', desc: 'Trigger high-velocity packet supernova', badge: 'D3', cat: 'D3 Stream' },
   ],
-  chronos: [
-    { param: 'beat', desc: 'Generate Chronos heartbeat proof with prime anchor', badge: 'CHRONOS', cat: 'System' },
-    { param: 'verify', desc: 'Verify state continuity and dwell deltas offline', badge: 'CHRONOS', cat: 'System' },
-    { param: 'pseudohash', desc: 'Compute pseudoHash(ISO+beat) verification', badge: 'CHRONOS', cat: 'System' },
-  ],
-  sentinel: [
-    { param: 'status', desc: 'Check dotfiles hash against Genesis ledger', badge: 'SENTINEL', cat: 'System' },
-    { param: 'verify', desc: 'Run Sentinel Cron Verifier and test QuinRestore', badge: 'SENTINEL', cat: 'System' },
-    { param: 'restore', desc: 'Auto-restore binary mismatches via QuinRestore', badge: 'SENTINEL', cat: 'System' },
-  ],
-  ouroboros: [
-    { param: 'status', desc: 'Inspect infinite self-feeding execution loop', badge: 'OURO', cat: 'System' },
-    { param: 'run', desc: 'Cycle Ouroboros output-to-input loop for zero-human uptime', badge: 'OURO', cat: 'System' },
-  ],
-  mhtml: [
-    { param: 'list', desc: 'List captured offline MHTML circular locked docs', badge: 'MHTML', cat: 'System' },
-    { param: 'capture https://nexus.internal/app', desc: 'Capture web applet into RFC 822 sandbox', badge: 'MHTML', cat: 'System' },
-    { param: 'view quantum_vault.mhtml', desc: 'Render MHTML circular locked doc in text browser', badge: 'MHTML', cat: 'System' },
-  ],
-  agent: [
-    { param: 'verify', desc: 'Verify NexusCommandAgent & SynapseBridge on port 5150', badge: 'AGENT', cat: 'System' },
-    { param: 'mdm', desc: 'Inspect MDM enrollment status (Unlinked / Zero Governor)', badge: 'AGENT', cat: 'System' },
-    { param: 'install', desc: 'Simulate recovery volume agent installation', badge: 'AGENT', cat: 'System' },
-  ],
-  mount: [
-    { param: '/dev/recovery /mnt/recovery', desc: 'Mount recovery environment volume', badge: 'MOUNT', cat: 'System' },
-    { param: '/dev/httpdfs /mnt/httpdfs', desc: 'Mount native HTTPDFS file system', badge: 'MOUNT', cat: 'System' },
-    { param: '/dev/nexus_drive /mnt/nexus_drive', desc: 'Mount cloud-mirrored Nexus drive', badge: 'MOUNT', cat: 'System' },
-  ],
-  engram: [
-    { param: 'open', desc: 'Open Google Drive & gemini.md memory engrams hub', badge: 'ENGRAM', cat: 'AI & Voice' },
-    { param: 'sync', desc: 'Synchronize memory engrams to Google Drive', badge: 'ENGRAM', cat: 'AI & Voice' },
-  ],
-  theme: [
-    { param: 'cyber', desc: 'Apply Cyberpunk Neon aesthetic', badge: 'THEME', cat: '3D Visuals' },
-    { param: 'matrix', desc: 'Apply Emerald Green Matrix aesthetic', badge: 'THEME', cat: '3D Visuals' },
-    { param: 'aura', desc: 'Apply Cosmic Violet Aura aesthetic', badge: 'THEME', cat: '3D Visuals' },
-  ],
   dock: [
     { param: 'bottom', desc: 'Pin terminal to bottom viewport dock', badge: 'LAYOUT', cat: 'System' },
     { param: 'float', desc: 'Switch terminal into floating draggable window', badge: 'LAYOUT', cat: 'System' },
     { param: 'fullscreen', desc: 'Expand terminal across full screen', badge: 'LAYOUT', cat: 'System' },
   ],
+  rgbled: [
+    { param: 'on', desc: 'Enable dynamic RGB-LED HSL% Hue Gradient Engine', badge: 'RGB-LED', cat: '3D Visuals' },
+    { param: 'off', desc: 'Disable RGB-LED engine (revert to static colors)', badge: 'RGB-LED', cat: '3D Visuals' },
+    { param: 'status', desc: 'Display live telemetry, HSL%, and color profile', badge: 'RGB-LED', cat: '3D Visuals' },
+    { param: 'hue 50%', desc: 'Set HSL hue percentage (0-100% or 0-360 deg)', badge: 'RGB-LED', cat: '3D Visuals' },
+    { param: 'profile ACEScg', desc: 'Switch to ACEScg AP1 wide gamut profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile DCI-P3', desc: 'Switch to DCI-P3 theatrical cinema profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile Rec.2020', desc: 'Switch to Rec.2020 laser HDR profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile QD-OLED', desc: 'Switch to Quantum Dot direct emission profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile Arri-Filmic', desc: 'Switch to ARRI LogC4 filmic roll-off profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile Cyber-Neon', desc: 'Switch to Cyber-Neon Tokyo Lux profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile Aurora-HSL', desc: 'Switch to Aurora Borealis plasma profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'profile Bioluminescence', desc: 'Switch to Bioluminescent abyssal profile', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'mode cycle', desc: 'Smooth continuous 360° color wheel wave', badge: 'MODE', cat: '3D Visuals' },
+    { param: 'mode pulse', desc: 'Breathing sinusoidal HSL hue oscillation', badge: 'MODE', cat: '3D Visuals' },
+    { param: 'mode audio', desc: 'Real-time audio & microphone reactive flare', badge: 'MODE', cat: '3D Visuals' },
+    { param: 'speed 1.5', desc: 'Set RGB-LED wave velocity multiplier', badge: 'PHYS', cat: '3D Visuals' },
+    { param: 'menu', desc: 'Open High-End Color Profile Matrix GUI', badge: 'GUI', cat: '3D Visuals' },
+  ],
+  profile: [
+    { param: 'ACEScg', desc: 'Academy Color Encoding System AP1 Primaries', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'DCI-P3', desc: 'SMPTE DCI-P3 Theatrical Cinema Standard', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'Rec.2020', desc: 'ITU-R BT.2020 Laser Ultra HD HDR Gamut', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'QD-OLED', desc: 'Quantum Dot Direct RGB Micro-Spectral Emission', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'Arri-Filmic', desc: 'ARRI LogC4 Wide Gamut 4 Filmic Roll-off', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'Cyber-Neon', desc: 'Cyber-Neon Tokyo Lux High-Contrast Laser', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'Aurora-HSL', desc: 'Aurora Borealis Geomagnetic Plasma Ionization', badge: 'COLOR', cat: '3D Visuals' },
+    { param: 'Bioluminescence', desc: 'Bathypelagic Abyssal Photophore Emission', badge: 'COLOR', cat: '3D Visuals' },
+  ],
 };
 
 /**
- * Filter and rank command suggestions based on user input and context state.
- * Priority order:
- * 1. Context parameter expansion (e.g. typing "render " lists all valid topologies)
- * 2. Exact prefix match at beginning of command (highest score)
- * 3. Prefix match on word boundary
- * 4. Substring match
+ * Build dynamic, state-aware suggestions generated on-the-fly from the current
+ * EnvironmentState and mounted device paths.
+ */
+function buildStateAdaptiveSuggestions(context?: AutocompleteContext): CommandSuggestion[] {
+  const list: CommandSuggestion[] = [];
+  const env = context?.envState;
+  const mounts = context?.mountedDevices || env?.mountedDevices || ['/mnt/nexus_drive', '/mnt/recovery', '/mnt/httpdfs'];
+
+  // 1. Suggestions for all Mounted Device Paths
+  mounts.forEach((mnt) => {
+    const clean = mnt.replace(/\/$/, '');
+    list.push({
+      command: `cd ${clean}`,
+      category: 'Mount',
+      description: `Navigate to mounted volume ${clean} (plug-n-play)`,
+      badge: 'MOUNT',
+      badgeColor: '#10b981',
+      score: 240,
+      isMountedPath: true,
+      statusHint: 'Mounted Volume',
+    });
+    list.push({
+      command: `ls ${clean}`,
+      category: 'Mount',
+      description: `Inspect files inside mounted volume ${clean}`,
+      badge: 'MOUNT',
+      badgeColor: '#10b981',
+      score: 220,
+      isMountedPath: true,
+      statusHint: 'Mounted Volume',
+    });
+    list.push({
+      command: `umount ${clean}`,
+      category: 'Mount',
+      description: `Safely unmount volume ${clean}`,
+      badge: 'UMOUNT',
+      badgeColor: '#f43f5e',
+      score: 200,
+      isMountedPath: true,
+      statusHint: 'Active Mount',
+    });
+  });
+
+  // Potential plug-n-play device targets to mount
+  const knownDevices = [
+    { dev: '/dev/recovery', mnt: '/mnt/recovery', label: 'Disaster Recovery partition' },
+    { dev: '/dev/httpdfs', mnt: '/mnt/httpdfs', label: 'HTTP distributed file system' },
+    { dev: '/dev/nexus_drive', mnt: '/mnt/nexus_drive', label: 'Aurora Nexus Git mirror drive' },
+    { dev: '/dev/quantum_vault', mnt: '/mnt/quantum_vault', label: 'Offline MHTML circular safe' },
+    { dev: '/dev/satcom', mnt: '/mnt/satlink', label: 'ATSC 3.0 satellite carrier link' },
+  ];
+  knownDevices.forEach(({ dev, mnt, label }) => {
+    const isMounted = mounts.some((m) => m === mnt || m.includes(mnt));
+    if (!isMounted) {
+      list.push({
+        command: `mount ${dev} ${mnt}`,
+        category: 'Mount',
+        description: `Mount ${label} onto ${mnt}`,
+        badge: 'PLUG',
+        badgeColor: '#06b6d4',
+        score: 215,
+        statusHint: 'Available Device',
+      });
+    }
+  });
+
+  if (!env) {
+    return list;
+  }
+
+  // 2. 3D Topology Suggestions adapted to current topology
+  const currentTop = env.topology;
+  Object.entries(TOPOLOGY_LABELS).forEach(([topKey, label]) => {
+    const isActive = topKey === currentTop;
+    list.push({
+      command: `render ${topKey}`,
+      category: '3D Visuals',
+      description: isActive ? `${label} [Current Active 3D Topology]` : `Switch 3D background to ${label}`,
+      badge: isActive ? 'ACTIVE' : '3D',
+      badgeColor: isActive ? '#10b981' : '#06b6d4',
+      score: isActive ? 180 : 225,
+      isEnvironmentAdaptive: true,
+      statusHint: isActive ? 'Current Topology' : undefined,
+    });
+  });
+
+  // 3. Sentiment Suggestions adapted to current sentiment
+  const currentSent = env.sentiment;
+  Object.entries(SENTIMENT_LABELS).forEach(([sentKey, label]) => {
+    const isActive = sentKey === currentSent;
+    list.push({
+      command: `sentiment ${sentKey}`,
+      category: '3D Visuals',
+      description: isActive ? `${label} [Current Active Sentiment]` : `Shift environment physics & mood to ${label}`,
+      badge: isActive ? 'ACTIVE' : 'MOOD',
+      badgeColor: isActive ? '#10b981' : '#f59e0b',
+      score: isActive ? 175 : 215,
+      isEnvironmentAdaptive: true,
+      statusHint: isActive ? 'Active Mood' : undefined,
+    });
+  });
+
+  // 4. Dynamic RGB-LED HSL Engine & High-End Color Profiles
+  const rgbEnabled = env.rgbLed?.enabled ?? false;
+  const currentProfile = env.rgbLed?.profile || 'ACEScg';
+  if (!rgbEnabled) {
+    list.push({
+      command: 'rgbled on',
+      category: '3D Visuals',
+      description: 'Engage dynamic RGB-LED HSL% Hue Gradient Engine & wide-gamut lighting',
+      badge: 'RGB-LED',
+      badgeColor: '#ec4899',
+      score: 260,
+      isEnvironmentAdaptive: true,
+      statusHint: 'LED Engine Muted',
+    });
+  } else {
+    list.push({
+      command: 'rgbled off',
+      category: '3D Visuals',
+      description: 'Disable RGB-LED engine (revert to static environment colors)',
+      badge: 'RGB-LED',
+      badgeColor: '#94a3b8',
+      score: 200,
+      isEnvironmentAdaptive: true,
+      statusHint: `Active: ${currentProfile}`,
+    });
+    list.push({
+      command: 'rgbled menu',
+      category: '3D Visuals',
+      description: 'Open High-End Color Profile Matrix GUI (ACEScg, DCI-P3, QD-OLED)',
+      badge: 'GUI',
+      badgeColor: '#ec4899',
+      score: 245,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Color Matrix',
+    });
+    list.push({
+      command: 'rgbled status',
+      category: '3D Visuals',
+      description: 'Inspect live RGB-LED telemetry, HSL hue percentage, and AP1 primaries',
+      badge: 'RGB-LED',
+      badgeColor: '#ec4899',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'rgbled mode cycle',
+      category: '3D Visuals',
+      description: 'Switch RGB-LED to continuous 360° color wheel wave cycle',
+      badge: 'RGB-LED',
+      badgeColor: '#ec4899',
+      score: 225,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'rgbled mode audio',
+      category: '3D Visuals',
+      description: 'Switch RGB-LED to microphone & audio reactive chromatic flare',
+      badge: 'RGB-LED',
+      badgeColor: '#ec4899',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'rgbled hue 50%',
+      category: '3D Visuals',
+      description: 'Set RGB-LED HSL hue percentage (0% - 100% or 0° - 360°)',
+      badge: 'RGB-LED',
+      badgeColor: '#ec4899',
+      score: 215,
+      isEnvironmentAdaptive: true,
+    });
+
+    Object.entries(COLOR_PROFILE_LABELS).forEach(([profKey, desc]) => {
+      const isProfActive = profKey === currentProfile;
+      list.push({
+        command: `profile ${profKey}`,
+        category: '3D Visuals',
+        description: isProfActive ? `${desc} [Current Active Profile]` : `Switch wide-gamut profile to ${desc}`,
+        badge: isProfActive ? 'ACTIVE' : 'COLOR',
+        badgeColor: isProfActive ? '#10b981' : '#ec4899',
+        score: isProfActive ? 180 : 230,
+        isEnvironmentAdaptive: true,
+        statusHint: isProfActive ? 'Active Profile' : undefined,
+      });
+    });
+  }
+
+  // 5. Audio, Ambient & Microphone States
+  if (context?.isMicListening) {
+    list.push({
+      command: 'mic off',
+      category: 'AI & Voice',
+      description: 'Disable microphone audio input and speech recognition',
+      badge: 'MIC',
+      badgeColor: '#10b981',
+      score: 240,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Mic Active',
+    });
+  } else {
+    list.push({
+      command: 'mic on',
+      category: 'AI & Voice',
+      description: 'Enable microphone to speak commands & modulate border waveform',
+      badge: 'MIC',
+      badgeColor: '#06b6d4',
+      score: 240,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Mic Muted',
+    });
+    list.push({
+      command: 'listen',
+      category: 'AI & Voice',
+      description: 'Toggle microphone voice listening and border waveform',
+      badge: 'VOICE',
+      badgeColor: '#06b6d4',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+  }
+
+  if (env.voiceActive) {
+    list.push({
+      command: 'voice off',
+      category: 'AI & Voice',
+      description: 'Mute spoken AI voice audio responses',
+      badge: 'VOICE',
+      badgeColor: '#94a3b8',
+      score: 200,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Voice ON',
+    });
+  } else {
+    list.push({
+      command: 'voice on',
+      category: 'AI & Voice',
+      description: 'Enable spoken AI voice responses projected into 3D visual',
+      badge: 'VOICE',
+      badgeColor: '#8b5cf6',
+      score: 230,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Voice Muted',
+    });
+  }
+
+  if (!env.ambientSoundscape) {
+    list.push({
+      command: 'ambient on',
+      category: 'AI & Voice',
+      description: 'Enable dynamic Web Audio ambient soundscape synthesis tuned to sentiment',
+      badge: 'AUDIO',
+      badgeColor: '#8b5cf6',
+      score: 235,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Ambient OFF',
+    });
+  } else {
+    list.push({
+      command: 'ambient off',
+      category: 'AI & Voice',
+      description: 'Mute dynamic ambient soundscape generator',
+      badge: 'AUDIO',
+      badgeColor: '#94a3b8',
+      score: 200,
+      isEnvironmentAdaptive: true,
+      statusHint: 'Ambient ON',
+    });
+    list.push({
+      command: 'ambient volume 0.5',
+      category: 'AI & Voice',
+      description: 'Adjust ambient soundscape volume (0.0 - 1.0)',
+      badge: 'AUDIO',
+      badgeColor: '#8b5cf6',
+      score: 210,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'harmonic 432',
+      category: 'AI & Voice',
+      description: 'Set Harmonic Resonator to 432 Hz (Foundational Equilibrium)',
+      badge: 'RESON',
+      badgeColor: '#8b5cf6',
+      score: 215,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'harmonic 528',
+      category: 'AI & Voice',
+      description: 'Set Harmonic Resonator to 528 Hz (Transformation / Ingestion State)',
+      badge: 'RESON',
+      badgeColor: '#8b5cf6',
+      score: 215,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'harmonic 963',
+      category: 'AI & Voice',
+      description: 'Set Harmonic Resonator to 963 Hz (Transcendent Consensus)',
+      badge: 'RESON',
+      badgeColor: '#8b5cf6',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'harmonic all',
+      category: 'AI & Voice',
+      description: 'Harmonize all 3 Solfeggio resonant frequencies simultaneously',
+      badge: 'RESON',
+      badgeColor: '#8b5cf6',
+      score: 225,
+      isEnvironmentAdaptive: true,
+    });
+  }
+
+  if (env.solfeggio963) {
+    list.push({
+      command: '963 off',
+      category: 'AI & Voice',
+      description: 'Stop 963 Hz solfeggio oscillator',
+      badge: 'AUDIO',
+      badgeColor: '#94a3b8',
+      score: 210,
+      isEnvironmentAdaptive: true,
+      statusHint: '963Hz Active',
+    });
+  } else {
+    list.push({
+      command: '963 on',
+      category: 'AI & Voice',
+      description: 'Engage pure 963 Hz solfeggio harmonic sine wave oscillator',
+      badge: 'AUDIO',
+      badgeColor: '#8b5cf6',
+      score: 210,
+      isEnvironmentAdaptive: true,
+      statusHint: '963Hz Muted',
+    });
+  }
+
+  // 6. D3 Data Stream state
+  if (!env.d3Stream?.active) {
+    list.push({
+      command: 'd3 stream',
+      category: 'D3 Stream',
+      description: 'Toggle real-time D3.js background network data stream',
+      badge: 'D3',
+      badgeColor: '#06b6d4',
+      score: 225,
+      isEnvironmentAdaptive: true,
+      statusHint: 'D3 Stream Off',
+    });
+  } else {
+    list.push({
+      command: 'd3 shape force',
+      category: 'D3 Stream',
+      description: 'Render D3 Force-Directed dynamic node mesh topology',
+      badge: 'D3',
+      badgeColor: '#06b6d4',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'd3 shape streamgraph',
+      category: 'D3 Stream',
+      description: 'Render D3 Dynamic multi-layer flowing bandwidth streamgraph',
+      badge: 'D3',
+      badgeColor: '#06b6d4',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'd3 shape radar',
+      category: 'D3 Stream',
+      description: 'Render D3 Orbital radial telemetry sweep matrix',
+      badge: 'D3',
+      badgeColor: '#06b6d4',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'd3 shape chord',
+      category: 'D3 Stream',
+      description: 'Render D3 Satellite constellation chord transfer ring',
+      badge: 'D3',
+      badgeColor: '#06b6d4',
+      score: 220,
+      isEnvironmentAdaptive: true,
+    });
+    list.push({
+      command: 'd3 panel',
+      category: 'D3 Stream',
+      description: 'Toggle floating D3 telemetry HUD control panel',
+      badge: 'HUD',
+      badgeColor: '#06b6d4',
+      score: 210,
+      isEnvironmentAdaptive: true,
+    });
+  }
+
+  // 7. Terminal Dock Layout, Clear Mode & Canvas Minimize
+  if (env.terminalDock !== 'center') {
+    list.push({
+      command: 'dock center',
+      category: 'System',
+      description: 'Center terminal workstation with expanded visibility of all options',
+      badge: 'CENTER',
+      badgeColor: '#00f2ff',
+      score: 215,
+      isEnvironmentAdaptive: true,
+    });
+  }
+  if (env.terminalDock !== 'bottom') {
+    list.push({
+      command: 'dock bottom',
+      category: 'System',
+      description: 'Pin terminal workstation to bottom dock',
+      badge: 'BOTTOM',
+      badgeColor: '#38bdf8',
+      score: 200,
+      isEnvironmentAdaptive: true,
+    });
+  }
+  if (env.terminalDock !== 'floating') {
+    list.push({
+      command: 'dock float',
+      category: 'System',
+      description: 'Switch terminal into floating compact window',
+      badge: 'FLOAT',
+      badgeColor: '#38bdf8',
+      score: 200,
+      isEnvironmentAdaptive: true,
+    });
+  }
+  if (env.terminalDock !== 'fullscreen') {
+    list.push({
+      command: 'dock fullscreen',
+      category: 'System',
+      description: 'Expand terminal across full display viewport',
+      badge: 'FULLSCREEN',
+      badgeColor: '#38bdf8',
+      score: 200,
+      isEnvironmentAdaptive: true,
+    });
+  }
+
+  // Pure Canvas Mode (Minimize terminal)
+  list.push({
+    command: 'canvas',
+    category: 'System',
+    description: 'Minimize terminal to pure canvas to view 100% background visualizer',
+    badge: 'CANVAS',
+    badgeColor: '#00f2ff',
+    score: 210,
+    isEnvironmentAdaptive: true,
+  });
+
+  // Clear / Ghost Transparency Mode
+  list.push({
+    command: env.terminalOpacity <= 0.15 ? 'opacity 0.85' : 'ghost',
+    category: 'System',
+    description: env.terminalOpacity <= 0.15 ? 'Restore solid glass background to terminal' : 'Make terminal glass ultra-clear / transparent to view background',
+    badge: 'CLEAR',
+    badgeColor: '#f59e0b',
+    score: 208,
+    isEnvironmentAdaptive: true,
+  });
+
+  // 8. Geospatial sync & Earth descent
+  list.push({
+    command: 'geosync on',
+    category: 'System',
+    description: 'Synchronize terminal with physical GPS coordinates & trigger Earth descent',
+    badge: 'GEO',
+    badgeColor: '#10b981',
+    score: 230,
+    isEnvironmentAdaptive: true,
+  });
+
+  return list;
+}
+
+/**
+ * Filter and rank command suggestions based on user input, environment state, and mounted device paths.
  */
 export function getCommandSuggestions(
   query: string,
   limit: number = 6,
-  additionalFiles: string[] = []
+  contextOrFiles: AutocompleteContext | string[] = []
 ): CommandSuggestion[] {
-  if (!query) return [];
+  // Normalize context
+  const context: AutocompleteContext = Array.isArray(contextOrFiles)
+    ? { vfsFiles: contextOrFiles }
+    : contextOrFiles || {};
 
-  const rawLower = query.toLowerCase();
+  const vfsFiles = context.vfsFiles || [];
+  const stateAdaptiveList = buildStateAdaptiveSuggestions(context);
+
+  const seen = new Set<string>();
+  const candidates: CommandSuggestion[] = [];
+
+  // When query is empty, return the highest-scoring contextual suggestions directly
+  if (!query || !query.trim()) {
+    // Pick the most immediately useful commands for the current environment & mounts
+    for (const item of stateAdaptiveList) {
+      if (!seen.has(item.command.toLowerCase())) {
+        seen.add(item.command.toLowerCase());
+        candidates.push(item);
+      }
+    }
+    // Also add essential system fallbacks
+    for (const item of COMMAND_REGISTRY) {
+      if (['help', 'clear', 'telemetry', 'canvas'].includes(item.command)) {
+        if (!seen.has(item.command.toLowerCase())) {
+          seen.add(item.command.toLowerCase());
+          candidates.push({ ...item, score: 180 });
+        }
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates.slice(0, limit);
+  }
+
+  const clean = query.trim().toLowerCase();
   const tokens = query.trim().split(/\s+/);
   const primaryCmd = tokens[0]?.toLowerCase() || '';
   const hasTrailingSpace = query.endsWith(' ');
   const paramFilter = tokens.length > 1 ? tokens.slice(1).join(' ').toLowerCase() : '';
 
-  const candidates: CommandSuggestion[] = [];
-  const seen = new Set<string>();
+  // 1. Check State-Adaptive suggestions first (mounted device paths, current active topology, etc.)
+  for (const item of stateAdaptiveList) {
+    const cmdLower = item.command.toLowerCase();
+    let score = 0;
 
-  // 1. Check Context Parameter Expansions (e.g., render <topology>, sentiment <mood>)
+    if (cmdLower === clean) {
+      score = item.score + 50;
+    } else if (cmdLower.startsWith(clean)) {
+      score = item.score + 25 - (cmdLower.length - clean.length);
+    } else if (cmdLower.includes(clean)) {
+      score = item.score - cmdLower.indexOf(clean);
+    } else {
+      // Sub-token match
+      const words = cmdLower.split(/\s+/);
+      if (words.some((w) => w.startsWith(clean))) {
+        score = item.score + 10;
+      }
+    }
+
+    if (score > 0 && !seen.has(cmdLower)) {
+      seen.add(cmdLower);
+      candidates.push({
+        ...item,
+        score,
+      });
+    }
+  }
+
+  // 2. Context Parameter Expansions (render, sentiment, profile, rgbled, etc.)
   if (CONTEXT_PARAM_EXPANSIONS[primaryCmd]) {
     const expansions = CONTEXT_PARAM_EXPANSIONS[primaryCmd];
     for (const exp of expansions) {
       const fullCmd = `${primaryCmd} ${exp.param}`;
-      if (hasTrailingSpace || exp.param.toLowerCase().startsWith(paramFilter) || fullCmd.toLowerCase().startsWith(rawLower.trim())) {
-        if (!seen.has(fullCmd.toLowerCase())) {
-          seen.add(fullCmd.toLowerCase());
+      const fullLower = fullCmd.toLowerCase();
+      if (
+        hasTrailingSpace ||
+        exp.param.toLowerCase().startsWith(paramFilter) ||
+        fullLower.startsWith(clean) ||
+        fullLower.includes(clean)
+      ) {
+        if (!seen.has(fullLower)) {
+          seen.add(fullLower);
           candidates.push({
             command: fullCmd,
             category: exp.cat,
@@ -318,16 +916,17 @@ export function getCommandSuggestions(
     }
   }
 
-  // 2. Dynamic File completions for commands taking file paths (cat, edit, rm, cd, node)
-  const fileCmds = ['cat', 'edit', 'nano', 'vim', 'rm', 'cd', 'node'];
+  // 3. Dynamic File and Directory completions (cat, edit, cd, ls, etc.)
+  const fileCmds = ['cat', 'edit', 'nano', 'vim', 'rm', 'cd', 'ls', 'node', 'tree'];
   if (fileCmds.includes(primaryCmd)) {
-    additionalFiles.forEach((file) => {
+    vfsFiles.forEach((file) => {
       const isDir = file.endsWith('/');
       const cleanFile = file.replace(/\/$/, '');
       const fullCmd = `${primaryCmd} ${cleanFile}`;
-      if (hasTrailingSpace || cleanFile.toLowerCase().startsWith(paramFilter)) {
-        if (!seen.has(fullCmd.toLowerCase())) {
-          seen.add(fullCmd.toLowerCase());
+      const fullLower = fullCmd.toLowerCase();
+      if (hasTrailingSpace || cleanFile.toLowerCase().startsWith(paramFilter) || fullLower.includes(clean)) {
+        if (!seen.has(fullLower)) {
+          seen.add(fullLower);
           candidates.push({
             command: fullCmd,
             category: 'VFS',
@@ -340,8 +939,7 @@ export function getCommandSuggestions(
     });
   }
 
-  // 3. Fallback to Command Registry
-  const clean = query.trim().toLowerCase();
+  // 4. Command Registry Matches
   for (const item of COMMAND_REGISTRY) {
     const cmdLower = item.command.toLowerCase();
     if (seen.has(cmdLower)) continue;
@@ -370,9 +968,8 @@ export function getCommandSuggestions(
     }
   }
 
-  // Sort descending by score, then ascending by command length
+  // Sort descending by score, then ascending by length
   candidates.sort((a, b) => b.score - a.score || a.command.length - b.command.length);
 
   return candidates.slice(0, limit);
 }
-

@@ -30,6 +30,7 @@ import {
   Cloud,
   HardDrive,
   Music,
+  Palette,
 } from 'lucide-react';
 import {
   EnvironmentState,
@@ -47,6 +48,7 @@ import { omniNexusService } from '../services/omniNexusService';
 import { exportQuineFile } from '../services/quineService';
 import { getCommandSuggestions, CommandSuggestion } from '../services/autocompleteService';
 import { geoNexusService } from '../services/geoNexusService';
+import { computeRgbLedState, COLOR_PROFILES, RgbLedProfile, RgbLedMode } from '../services/colorProfileService';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
@@ -55,6 +57,7 @@ import { CommandHistoryModal } from './CommandHistoryModal';
 import { VoiceProfileModal } from './VoiceProfileModal';
 import { LinksBrowserModal } from './LinksBrowserModal';
 import { GoogleDriveEngramsModal, MASTER_GEMINI_MD_DEFAULT } from './GoogleDriveEngramsModal';
+import { ColorProfileModal } from './ColorProfileModal';
 
 interface HyperTerminalProps {
   envState: EnvironmentState;
@@ -68,7 +71,8 @@ const BUILTIN_COMMANDS = [
   'voice', 'speak', 'mic', 'listen', '963', 'node', 'js', 'git', 'singularity', 'satcom',
   'swarm', 'arbitrage', 'voip', 'mcp', 'macro', 'quine', 'telemetry', 'date', 'uptime',
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
-  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync'
+  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
+  'rgbled', 'profile'
 ];
 
 export const HyperTerminal: React.FC<HyperTerminalProps> = ({ envState, setEnvState }) => {
@@ -115,6 +119,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [linksInitialUrl, setLinksInitialUrl] = useState('file:///root/gemini.md');
   const [isEngramsModalOpen, setIsEngramsModalOpen] = useState(false);
+  const [isColorProfileModalOpen, setIsColorProfileModalOpen] = useState(false);
   const [engramsMarkdown, setEngramsMarkdown] = useState<string>(MASTER_GEMINI_MD_DEFAULT);
   const [chromeVoxAnnounce, setChromeVoxAnnounce] = useState('');
   const [commandHistoryItems, setCommandHistoryItems] = useState<CommandHistoryItem[]>([
@@ -213,17 +218,20 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     return unsub;
   }, []);
 
-  // Global Ctrl+R hotkey to open history modal
+  // Global hotkeys (Ctrl+R history, Escape to restore pure canvas)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
         e.preventDefault();
         setIsHistoryModalOpen((prev) => !prev);
+      } else if (e.key === 'Escape' && isPureCanvas) {
+        e.preventDefault();
+        setIsPureCanvas(false);
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  }, [isPureCanvas]);
 
   // Synchronize dynamic ambient soundscape to envState.ambientSoundscape & envState.sentiment
   useEffect(() => {
@@ -405,6 +413,11 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   speed <val>            : Set rotation / wave speed (0.2 to 3.0)
   turbulence <val>       : Adjust particle noise & wave distortion
   bloom <val>            : Set global glow intensity (0.0 to 5.0)
+  rgbled on | off        : Toggle real-time RGB-LED HSL% Hue Gradient Engine
+  rgbled hue <0-100%|deg>: Set exact HSL hue angle or percentage
+  rgbled profile <name>  : Switch rendering gamut (ACEScg, DCI-P3, Rec.2020, QD-OLED, etc.)
+  rgbled mode <mode>     : Set modulation mode (cycle, pulse, static, audio)
+  profile <name>         : Switch high-end dynamic rendering color profile
   burst                  : Trigger particle supernova explosion wave
   calm                   : Stabilize into harmonic low-entropy resonance
   shatter                : Inject chaotic high-frequency perturbation
@@ -1596,14 +1609,38 @@ x-telemetry-status: STREAM_ACTIVE
 
       case 'dock': {
         const mode = (args[0] || '').toLowerCase();
-        if (mode === 'bottom' || mode === 'float' || mode === 'fullscreen') {
+        if (
+          mode === 'center' ||
+          mode === 'middle' ||
+          mode === 'bottom' ||
+          mode === 'float' ||
+          mode === 'floating' ||
+          mode === 'fullscreen' ||
+          mode === 'full'
+        ) {
+          const targetDock =
+            mode === 'center' || mode === 'middle'
+              ? 'center'
+              : mode === 'float' || mode === 'floating'
+              ? 'floating'
+              : mode === 'fullscreen' || mode === 'full'
+              ? 'fullscreen'
+              : 'bottom';
           setEnvState((prev) => ({
             ...prev,
-            terminalDock: mode === 'float' ? 'floating' : mode as any,
+            terminalDock: targetDock,
           }));
-          appendLine(`Terminal dock switched to [${mode.toUpperCase()}].`, 'success');
+          appendLine(`Terminal dock switched to [${targetDock.toUpperCase()}].`, 'success', '⊞');
+        } else if (mode === 'clear' || mode === 'ghost') {
+          const next = envState.terminalOpacity <= 0.15 ? 0.85 : 0.05;
+          setEnvState((prev) => ({ ...prev, terminalOpacity: next }));
+          appendLine(
+            `Terminal glass set to [${next <= 0.15 ? 'ULTRA-CLEAR GHOST (5%)' : 'SOLID GLASS (85%)'}].`,
+            'success',
+            '✨'
+          );
         } else {
-          appendLine('Usage: dock <bottom|float|fullscreen>', 'error');
+          appendLine('Usage: dock <center|bottom|float|fullscreen|clear>', 'error');
         }
         break;
       }
@@ -1620,20 +1657,196 @@ x-telemetry-status: STREAM_ACTIVE
         break;
       }
 
-      case 'opacity': {
-        const val = parseFloat(args[0]);
-        if (!isNaN(val) && val >= 0.1 && val <= 1.0) {
-          setEnvState((prev) => ({ ...prev, terminalOpacity: val }));
-          appendLine(`Terminal glass opacity set to ${(val * 100).toFixed(0)}%`, 'success');
+      case 'rgbled': {
+        const sub = (args[0] || '').toLowerCase();
+        if (!sub || sub === 'status') {
+          const cfg = envState.rgbLed;
+          const live = computeRgbLedState(Date.now() / 1000, cfg);
+          appendLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
+          appendLine(`🌈 RGB-LED HSL% ENGINE STATUS: ${cfg.enabled ? 'ACTIVE' : 'DISABLED'}`, 'good');
+          appendLine(`Current Profile: ${cfg.profile} (${COLOR_PROFILES[cfg.profile as RgbLedProfile]?.standard || 'Standard'})`, 'output');
+          appendLine(`HSL Value: ${cfg.huePercent.toFixed(1)}% Hue (${Math.round((cfg.huePercent / 100) * 360)}°) | Sat: ${cfg.saturation}% | Light: ${cfg.lightness}%`, 'output');
+          appendLine(`Modulation: ${cfg.mode.toUpperCase()} | Speed: ${cfg.speed}x | Spread: ${cfg.spread}° | Intensity: ${cfg.intensity}x`, 'output');
+          if (live) {
+            appendLine(`Live Primary: ${live.primaryHex} | Secondary: ${live.secondaryHex} | Ambient: ${live.ambientHex}`, 'output');
+            appendLine(`Gamut Anchors: ${live.palette.join('  ')}`, 'output');
+          }
+          appendLine('Subcommands: on | off | hue <0-100%|deg> | profile <name> | mode <cycle|pulse|static|audio> | speed <val> | menu', 'system');
+          appendLine('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
+          break;
+        }
+
+        if (sub === 'on') {
+          setEnvState((prev) => ({ ...prev, rgbLed: { ...prev.rgbLed, enabled: true } }));
+          appendLine('RGB-LED HSL% Hue Gradient Engine enabled.', 'success', '🌈');
+          audioVoiceService.playTone(880, 'sine', 100);
+        } else if (sub === 'off') {
+          setEnvState((prev) => ({ ...prev, rgbLed: { ...prev.rgbLed, enabled: false } }));
+          appendLine('RGB-LED Engine disabled (reverting to static primary/secondary colors).', 'system');
+        } else if (sub === 'hue') {
+          const rawVal = args[1];
+          if (!rawVal) {
+            appendLine('Usage: rgbled hue <0-100% | 0-360deg>', 'error');
+            break;
+          }
+          let huePct = parseFloat(rawVal);
+          if (rawVal.endsWith('%')) {
+            huePct = parseFloat(rawVal.replace('%', ''));
+          } else if (parseFloat(rawVal) > 100) {
+            huePct = (parseFloat(rawVal) / 360) * 100;
+          }
+          if (!isNaN(huePct)) {
+            huePct = Math.max(0, Math.min(100, huePct));
+            setEnvState((prev) => ({
+              ...prev,
+              rgbLed: { ...prev.rgbLed, enabled: true, huePercent: huePct }
+            }));
+            appendLine(`RGB-LED Hue set to ${huePct.toFixed(1)}% (${Math.round((huePct / 100) * 360)}°)`, 'success', '🎨');
+            audioVoiceService.playTone(1050, 'sine', 80);
+          } else {
+            appendLine('Invalid hue value. Expected 0-100% or 0-360 degrees.', 'error');
+          }
+        } else if (sub === 'profile') {
+          const profileInput = (args[1] || '').toLowerCase();
+          const matchedKey = (Object.keys(COLOR_PROFILES) as RgbLedProfile[]).find(
+            (k) => k.toLowerCase() === profileInput || k.toLowerCase().replace(/[^a-z0-9]/g, '') === profileInput.replace(/[^a-z0-9]/g, '')
+          );
+          if (matchedKey) {
+            const prof = COLOR_PROFILES[matchedKey];
+            setEnvState((prev) => ({
+              ...prev,
+              rgbLed: {
+                ...prev.rgbLed,
+                enabled: true,
+                profile: matchedKey,
+                huePercent: (prof.baseHue / 360) * 100
+              }
+            }));
+            appendLine(`Active Color Profile set to: [${matchedKey}] - ${prof.name}`, 'success', '✨');
+            appendLine(`Standard: ${prof.standard} | Gamut: ${prof.palette.join(' ')}`, 'output');
+            audioVoiceService.playTone(1200, 'sine', 120);
+          } else {
+            appendLine(`Available profiles: ${Object.keys(COLOR_PROFILES).join(', ')}`, 'error');
+          }
+        } else if (sub === 'mode') {
+          const modeInput = (args[1] || '').toLowerCase() as RgbLedMode;
+          if (['cycle', 'pulse', 'static', 'audio'].includes(modeInput)) {
+            setEnvState((prev) => ({
+              ...prev,
+              rgbLed: { ...prev.rgbLed, mode: modeInput, enabled: true }
+            }));
+            appendLine(`RGB-LED Modulation Mode set to: ${modeInput.toUpperCase()}`, 'success', '⚡');
+          } else {
+            appendLine('Usage: rgbled mode <cycle|pulse|static|audio>', 'error');
+          }
+        } else if (sub === 'speed') {
+          const spd = parseFloat(args[1]);
+          if (!isNaN(spd) && spd >= 0.05 && spd <= 10) {
+            setEnvState((prev) => ({
+              ...prev,
+              rgbLed: { ...prev.rgbLed, speed: spd }
+            }));
+            appendLine(`RGB-LED wave speed set to ${spd.toFixed(2)}x`, 'success');
+          } else {
+            appendLine('Usage: rgbled speed <0.1 - 5.0>', 'error');
+          }
+        } else if (sub === 'sat') {
+          const sat = parseFloat(args[1]);
+          if (!isNaN(sat) && sat >= 0 && sat <= 100) {
+            setEnvState((prev) => ({
+              ...prev,
+              rgbLed: { ...prev.rgbLed, saturation: sat }
+            }));
+            appendLine(`RGB-LED saturation set to ${sat}%`, 'success');
+          } else {
+            appendLine('Usage: rgbled sat <0 - 100>', 'error');
+          }
+        } else if (sub === 'light') {
+          const light = parseFloat(args[1]);
+          if (!isNaN(light) && light >= 0 && light <= 100) {
+            setEnvState((prev) => ({
+              ...prev,
+              rgbLed: { ...prev.rgbLed, lightness: light }
+            }));
+            appendLine(`RGB-LED lightness set to ${light}%`, 'success');
+          } else {
+            appendLine('Usage: rgbled light <0 - 100>', 'error');
+          }
+        } else if (sub === 'menu' || sub === 'gui' || sub === 'modal') {
+          setIsColorProfileModalOpen(true);
+          appendLine('Opened High-End Color Profile & RGB-LED Matrix GUI.', 'system', '🎨');
         } else {
-          appendLine('Usage: opacity <0.1 - 1.0>', 'error');
+          appendLine('Usage: rgbled [status|on|off|hue <0-100%>|profile <name>|mode <cycle|pulse|static|audio>|speed <val>|menu]', 'error');
         }
         break;
       }
 
+      case 'profile': {
+        const profileInput = (args[0] || '').toLowerCase();
+        if (!profileInput) {
+          setIsColorProfileModalOpen(true);
+          appendLine('Opened High-End Rendering Color Profiles GUI.', 'system', '🎨');
+          break;
+        }
+        const matchedKey = (Object.keys(COLOR_PROFILES) as RgbLedProfile[]).find(
+          (k) => k.toLowerCase() === profileInput || k.toLowerCase().replace(/[^a-z0-9]/g, '') === profileInput.replace(/[^a-z0-9]/g, '')
+        );
+        if (matchedKey) {
+          const prof = COLOR_PROFILES[matchedKey];
+          setEnvState((prev) => ({
+            ...prev,
+            rgbLed: {
+              ...prev.rgbLed,
+              enabled: true,
+              profile: matchedKey,
+              huePercent: (prof.baseHue / 360) * 100
+            }
+          }));
+          appendLine(`Active Color Profile set to: [${matchedKey}] - ${prof.name}`, 'success', '✨');
+          appendLine(`Standard: ${prof.standard} | Gamut anchors: ${prof.palette.join('  ')}`, 'output');
+        } else {
+          appendLine(`Unknown profile. Choose from: ${Object.keys(COLOR_PROFILES).join(', ')}`, 'error');
+        }
+        break;
+      }
+
+      case 'opacity': {
+        const raw = (args[0] || '').toLowerCase();
+        if (raw === 'clear' || raw === 'ghost' || raw === '0') {
+          setEnvState((prev) => ({ ...prev, terminalOpacity: 0.05 }));
+          appendLine('Terminal glass opacity set to ULTRA-CLEAR (5%). 100% background view enabled.', 'success', '✨');
+          break;
+        }
+        const val = parseFloat(raw);
+        if (!isNaN(val) && val >= 0.0 && val <= 1.0) {
+          setEnvState((prev) => ({ ...prev, terminalOpacity: val }));
+          appendLine(`Terminal glass opacity set to ${(val * 100).toFixed(0)}%`, 'success');
+        } else {
+          appendLine('Usage: opacity <0.0 - 1.0 | clear>', 'error');
+        }
+        break;
+      }
+
+      case 'ghost':
+      case 'clear-glass':
+      case 'glass': {
+        const next = envState.terminalOpacity <= 0.15 ? 0.85 : 0.05;
+        setEnvState((prev) => ({ ...prev, terminalOpacity: next }));
+        appendLine(
+          next <= 0.15
+            ? 'Terminal glass set to ULTRA-CLEAR GHOST mode (5% opacity). 100% background view enabled.'
+            : 'Terminal glass restored to SOLID GLASS mode (85% opacity).',
+          'success',
+          '✨'
+        );
+        break;
+      }
+
+      case 'minimize':
+      case 'hide':
       case 'canvas': {
-        setIsPureCanvas((prev) => !prev);
-        appendLine('Toggled pure visual canvas mode.', 'system');
+        setIsPureCanvas(true);
+        appendLine('Minimized terminal into Pure Canvas Mode. Admiring 100% background visualizer. (Press ESC or click button to restore).', 'system', '👁');
         break;
       }
 
@@ -1884,6 +2097,31 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
         setSelectedSuggestionIndex(-1);
         return;
       }
+    } else if (e.key === ' ' && (e.ctrlKey || e.metaKey)) {
+      // Ctrl+Space: Open adaptive command autocomplete radar
+      e.preventDefault();
+      const currentFiles = (() => {
+        try {
+          return vfs.listDir(activeInstance.cwd, '.').map((f) => (f.isDir ? `${f.name}/` : f.name));
+        } catch {
+          return [];
+        }
+      })();
+      const matches = getCommandSuggestions(inputVal, 10, {
+        envState,
+        mountedDevices: envState.mountedDevices,
+        vfsFiles: currentFiles,
+        cwd: activeInstance.cwd,
+        isMicListening,
+      });
+      if (matches.length > 0) {
+        setSuggestions(matches);
+        setShowSuggestions(true);
+        setSelectedSuggestionIndex(0);
+        setGhostSuggestion(matches[0].command);
+        audioVoiceService.playTone(720, 'sine', 35);
+      }
+      return;
     } else if (e.key === 'Tab') {
       e.preventDefault();
       if (showSuggestions && suggestions.length > 0) {
@@ -1903,11 +2141,17 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
           return [];
         }
       })();
-      const matches = getCommandSuggestions(inputVal, 8, currentFiles);
+      const matches = getCommandSuggestions(inputVal, 10, {
+        envState,
+        mountedDevices: envState.mountedDevices,
+        vfsFiles: currentFiles,
+        cwd: activeInstance.cwd,
+        isMicListening,
+      });
       if (matches.length === 1) {
         handleSelectSuggestion(matches[0].command);
         return;
-      } else if (matches.length > 1) {
+      } else if (matches.length > 0) {
         setSuggestions(matches);
         setShowSuggestions(true);
         setSelectedSuggestionIndex(0);
@@ -2012,7 +2256,13 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
       }
     })();
 
-    const matches = getCommandSuggestions(val, 6, currentFiles);
+    const matches = getCommandSuggestions(val, 8, {
+      envState,
+      mountedDevices: envState.mountedDevices,
+      vfsFiles: currentFiles,
+      cwd: activeInstance.cwd,
+      isMicListening,
+    });
     setSuggestions(matches);
     setShowSuggestions(matches.length > 0);
     setSelectedSuggestionIndex(-1);
@@ -2061,55 +2311,225 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
   };
 
   // Terminal Container positioning classes based on dock state
-  let containerPositionClass = 'fixed bottom-4 left-1/2 -translate-x-1/2 w-[96vw] max-w-5xl h-[440px]';
-  if (envState.terminalDock === 'fullscreen') {
-    containerPositionClass = 'fixed inset-4 w-auto h-auto';
+  let containerPositionClass = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-6xl h-[82vh] max-h-[740px]';
+  if (envState.terminalDock === 'bottom') {
+    containerPositionClass = 'fixed bottom-4 left-1/2 -translate-x-1/2 w-[96vw] max-w-6xl h-[460px]';
+  } else if (envState.terminalDock === 'fullscreen') {
+    containerPositionClass = 'fixed inset-3 w-auto h-auto';
   } else if (envState.terminalDock === 'floating') {
-    containerPositionClass = 'fixed top-16 right-6 w-[560px] h-[520px]';
+    containerPositionClass = 'fixed top-14 right-6 w-[580px] h-[550px]';
+  } else if (envState.terminalDock === 'center') {
+    containerPositionClass = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-6xl h-[82vh] max-h-[740px]';
   }
+
+  const isClearMode = envState.terminalOpacity <= 0.15;
+
+  const liveLed = envState.rgbLed?.enabled
+    ? computeRgbLedState(Date.now() / 1000, envState.rgbLed)
+    : null;
+
+  const CANVAS_TOPOLOGIES: { label: string; id: TopologyType }[] = [
+    { label: 'TORUS', id: 'torus' },
+    { label: 'TESSERACT', id: 'tesseract' },
+    { label: 'GALAXY', id: 'galaxy' },
+    { label: 'SINGULARITY', id: 'singularity' },
+    { label: 'NEURAL', id: 'neural' },
+    { label: 'EARTH', id: 'earth_nasa' },
+  ];
 
   return (
     <>
-      {/* Pure Canvas Floating Restore Trigger when minimized */}
-      {isPureCanvas && (
+      {/* Persistent Floating Canvas Mode / View Background Button (Top Right) */}
+      {!isPureCanvas && (
         <button
-          onClick={() => setIsPureCanvas(false)}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full border border-cyan-400 bg-black/80 text-cyan-300 font-mono text-xs font-bold shadow-[0_0_25px_rgba(0,242,255,0.4)] flex items-center gap-2 hover:bg-black transition cursor-pointer"
+          onClick={() => setIsPureCanvas(true)}
+          className="fixed top-3 right-4 z-40 px-3.5 py-1.5 rounded-xl border border-cyan-400/50 bg-black/80 backdrop-blur-md text-cyan-300 shadow-[0_0_20px_rgba(0,242,255,0.3)] flex items-center gap-2 hover:bg-cyan-500/25 hover:border-cyan-400 transition cursor-pointer text-xs font-bold"
+          title="Minimize Terminal to view background (Pure Canvas Mode)"
         >
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-          <span>RESTORE HYPERTERMINAL UI (100% VISUAL MODE ACTIVE)</span>
+          <Eye className="w-4 h-4 text-cyan-300 animate-pulse" />
+          <span>CANVAS (VIEW BACKGROUND)</span>
         </button>
+      )}
+
+      {/* Pure Canvas Floating HUD & Restore Trigger when Minimized */}
+      {isPureCanvas && (
+        <>
+          {/* Top-Right Instant Restore Button */}
+          <button
+            onClick={() => setIsPureCanvas(false)}
+            className="fixed top-3 right-4 z-50 px-4 py-2 rounded-xl border border-cyan-400 bg-cyan-500 text-slate-950 font-bold shadow-[0_0_25px_rgba(0,242,255,0.7)] flex items-center gap-2 hover:bg-cyan-400 transition cursor-pointer text-xs"
+            title="Restore HyperTerminal UI (or press ESC)"
+          >
+            <TerminalIcon className="w-4 h-4 text-slate-950" />
+            <span>RESTORE TERMINAL [ESC]</span>
+          </button>
+
+          {/* Bottom Interactive Canvas HUD Deck */}
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl border border-cyan-400/60 bg-black/85 backdrop-blur-xl text-cyan-300 font-mono text-xs shadow-[0_0_35px_rgba(0,242,255,0.4)] flex flex-wrap items-center gap-3 select-none">
+            {/* Visual Indicator */}
+            <div className="flex items-center gap-2 pr-2 border-r border-cyan-500/30">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+              <Eye className="w-4 h-4 text-cyan-300" />
+              <div className="flex flex-col">
+                <span className="text-[11px] font-bold text-white tracking-wide">100% VISUAL MODE</span>
+                <span className="text-[9px] text-cyan-400/80 uppercase">
+                  {envState.topology} • {envState.sentiment}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Topology Switcher while admiring background */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 uppercase hidden sm:inline mr-1">TOPOLOGY:</span>
+              {CANVAS_TOPOLOGIES.map((topo) => (
+                <button
+                  key={topo.id}
+                  onClick={() => {
+                    setEnvState((prev) => ({ ...prev, topology: topo.id }));
+                    appendLine(`Canvas Topology switched to [${topo.label}]`, 'success');
+                    audioVoiceService.playTone(880, 'sine', 60);
+                  }}
+                  className={`px-2 py-1 rounded text-[10px] font-bold transition cursor-pointer ${
+                    envState.topology === topo.id
+                      ? 'bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,242,255,0.5)]'
+                      : 'bg-black/50 text-slate-300 border border-slate-800 hover:text-white hover:border-cyan-500/50'
+                  }`}
+                >
+                  {topo.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Sensory Toggles */}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-cyan-500/30">
+              <button
+                onClick={() => {
+                  const on = audioVoiceService.toggle963();
+                  setEnvState((prev) => ({ ...prev, solfeggio963: on }));
+                }}
+                className={`p-1.5 rounded border text-[10px] font-bold transition cursor-pointer ${
+                  envState.solfeggio963
+                    ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400'
+                    : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title="Toggle 963Hz Solfeggio"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => {
+                  const next = !envState.ambientSoundscape;
+                  setEnvState((prev) => ({ ...prev, ambientSoundscape: next }));
+                  if (next) ambientAudioService.start(envState.sentiment);
+                  else ambientAudioService.stop();
+                }}
+                className={`p-1.5 rounded border text-[10px] font-bold transition cursor-pointer ${
+                  envState.ambientSoundscape
+                    ? 'bg-purple-500/30 text-purple-300 border-purple-400'
+                    : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title="Toggle Dynamic Ambient Soundscape"
+              >
+                <Music className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Restore Button */}
+              <button
+                onClick={() => setIsPureCanvas(false)}
+                className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,242,255,0.6)] cursor-pointer text-xs"
+              >
+                <TerminalIcon className="w-3.5 h-3.5 text-slate-950" />
+                <span>RESTORE TERMINAL</span>
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* The Sole UI: HyperTerminal Container */}
       {!isPureCanvas && (
         <div
-          className={`${containerPositionClass} z-30 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 font-mono select-none relative`}
+          className={`${containerPositionClass} z-30 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 font-mono select-none relative shadow-2xl`}
           style={{
-            backgroundColor: envState.highContrast ? 'rgba(0, 0, 0, 0.98)' : `rgba(4, 9, 20, ${envState.terminalOpacity})`,
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: envState.highContrast ? '2px solid #00f2ff' : `1px solid ${envState.primaryColor}55`,
+            backgroundColor: envState.highContrast
+              ? 'rgba(0, 0, 0, 0.98)'
+              : isClearMode
+              ? 'rgba(3, 7, 18, 0.08)'
+              : `rgba(4, 9, 20, ${envState.terminalOpacity})`,
+            backdropFilter: isClearMode ? 'blur(3px)' : 'blur(20px)',
+            WebkitBackdropFilter: isClearMode ? 'blur(3px)' : 'blur(20px)',
+            border: envState.highContrast
+              ? '2px solid #00f2ff'
+              : isClearMode
+              ? '1px solid rgba(0, 242, 255, 0.45)'
+              : liveLed
+              ? `1px solid ${liveLed.primaryHex}66`
+              : `1px solid ${envState.primaryColor}55`,
             boxShadow: envState.highContrast
               ? '0 0 30px rgba(0, 242, 255, 0.5), inset 0 0 20px rgba(0, 242, 255, 0.2)'
+              : isClearMode
+              ? '0 0 35px rgba(0, 242, 255, 0.25), inset 0 0 20px rgba(0, 242, 255, 0.08)'
+              : liveLed
+              ? `0 10px 40px rgba(0, 0, 0, 0.8), 0 0 32px ${liveLed.primaryHex}25`
               : `0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px ${envState.primaryColor}22`,
           }}
         >
+          {/* Dynamic High-End RGB-LED HSL% Hue Gradient Top Strip */}
+          {envState.rgbLed?.enabled && liveLed && (
+            <div
+              className="h-[2.5px] w-full shrink-0 z-20 relative overflow-hidden"
+              style={{
+                background: liveLed.cssGradient,
+                boxShadow: `0 0 10px ${liveLed.primaryHex}`,
+              }}
+            />
+          )}
+
           {/* Real-time Microphone Audio Waveform & Pulse Border */}
           <TerminalBorderWaveform
-            primaryColor={envState.primaryColor}
-            secondaryColor={envState.secondaryColor}
+            primaryColor={liveLed ? liveLed.primaryHex : envState.primaryColor}
+            secondaryColor={liveLed ? liveLed.secondaryHex : envState.secondaryColor}
             isMicActive={isMicListening}
             onToggleMic={handleToggleMic}
           />
 
-          {/* Header Bar */}
+          {/* Primary Window Control & Tab Bar (Row 1) */}
           <div
-            className="h-10 bg-black/75 px-3 flex items-center justify-between border-b shrink-0 text-xs gap-2 select-none relative z-10"
-            style={{ borderColor: `${envState.primaryColor}33` }}
+            className="h-10 bg-black/80 px-3 flex items-center justify-between border-b shrink-0 text-xs gap-2 select-none relative z-10"
+            style={{ borderColor: liveLed ? `${liveLed.primaryHex}33` : `${envState.primaryColor}33` }}
           >
-            {/* Shell Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 flex-1">
+            {/* Left: Window Action Dots & Shell Tabs */}
+            <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none py-1 flex-1">
+              {/* OS Window Lights */}
+              <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-slate-800">
+                {/* Red: Minimize to Canvas */}
+                <button
+                  onClick={() => setIsPureCanvas(true)}
+                  className="w-3 h-3 rounded-full bg-rose-500 hover:bg-rose-400 transition cursor-pointer shadow-[0_0_6px_rgba(244,63,94,0.6)]"
+                  title="Minimize Terminal to Pure Canvas Mode (or click CANVAS button)"
+                />
+                {/* Yellow: Toggle Ultra-Clear Glass Mode */}
+                <button
+                  onClick={() => {
+                    const next = envState.terminalOpacity <= 0.15 ? 0.85 : 0.05;
+                    setEnvState((prev) => ({ ...prev, terminalOpacity: next }));
+                  }}
+                  className="w-3 h-3 rounded-full bg-amber-400 hover:bg-amber-300 transition cursor-pointer shadow-[0_0_6px_rgba(251,191,36,0.6)]"
+                  title="Toggle Ultra-Clear Glass Ghost Mode"
+                />
+                {/* Green: Toggle Centered / Fullscreen Dock */}
+                <button
+                  onClick={() => {
+                    const next = envState.terminalDock === 'fullscreen' ? 'center' : 'fullscreen';
+                    setEnvState((prev) => ({ ...prev, terminalDock: next }));
+                  }}
+                  className="w-3 h-3 rounded-full bg-emerald-500 hover:bg-emerald-400 transition cursor-pointer shadow-[0_0_6px_rgba(16,185,129,0.6)]"
+                  title="Toggle Center / Fullscreen Dock"
+                />
+              </div>
+
+              {/* Shell Tabs */}
               {instances.map((inst) => (
                 <div
                   key={inst.id}
@@ -2121,7 +2541,7 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                   }`}
                 >
                   <TerminalIcon className="w-3 h-3 text-cyan-400" />
-                  <span className="truncate max-w-[120px]">{inst.title}</span>
+                  <span className="truncate max-w-[110px]">{inst.title}</span>
                   {instances.length > 1 && (
                     <button
                       onClick={(e) => closeInstance(inst.id, e)}
@@ -2139,22 +2559,121 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
               >
                 <Plus className="w-3 h-3" />
               </button>
+
+              {/* Active Path Pill */}
+              <div className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-[10px] text-slate-400 font-mono">
+                <span className="text-cyan-400">cwd:</span>
+                <span className="text-slate-200">{activeInstance.cwd}</span>
+              </div>
             </div>
 
-            {/* Quick Actions & Header Controls */}
+            {/* Right: Dock Selector, Clear Mode, Canvas Button Icon & Controls */}
             <div className="flex items-center gap-1.5 text-[11px] shrink-0">
-              {/* Microphone Audio Input & Border Waveform Toggle */}
+              {/* Dock Segmented Switcher */}
+              <div className="flex items-center p-0.5 rounded-lg bg-black/60 border border-slate-800 text-[10px]">
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalDock: 'center' }))}
+                  className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                    envState.terminalDock === 'center'
+                      ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-400 shadow-[0_0_8px_rgba(0,242,255,0.3)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Center Panel on Screen (Full Visibility)"
+                >
+                  ⊞ Center
+                </button>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalDock: 'bottom' }))}
+                  className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                    envState.terminalDock === 'bottom'
+                      ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-400 shadow-[0_0_8px_rgba(0,242,255,0.3)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Dock to Bottom"
+                >
+                  ⎁ Bottom
+                </button>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalDock: 'floating' }))}
+                  className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                    envState.terminalDock === 'floating'
+                      ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-400 shadow-[0_0_8px_rgba(0,242,255,0.3)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Floating Window"
+                >
+                  ❐ Float
+                </button>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalDock: 'fullscreen' }))}
+                  className={`px-2 py-0.5 rounded font-bold transition cursor-pointer ${
+                    envState.terminalDock === 'fullscreen'
+                      ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-400 shadow-[0_0_8px_rgba(0,242,255,0.3)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Fullscreen Viewport"
+                >
+                  ⛶ Full
+                </button>
+              </div>
+
+              {/* Go Clear / Ghost Mode Toggle */}
+              <button
+                onClick={() => {
+                  const next = envState.terminalOpacity <= 0.15 ? 0.85 : 0.05;
+                  setEnvState((prev) => ({ ...prev, terminalOpacity: next }));
+                }}
+                className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                  isClearMode
+                    ? 'bg-amber-500/25 text-amber-300 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.4)] animate-pulse'
+                    : 'bg-black/40 text-slate-300 border-slate-800 hover:text-amber-300 hover:border-amber-400/50'
+                }`}
+                title="Toggle Ultra-Clear Transparent Glass (100% Background View Through Panel)"
+              >
+                <Layers className="w-3 h-3 text-amber-400" />
+                <span>{isClearMode ? 'SOLID' : 'GO CLEAR'}</span>
+              </button>
+
+              {/* Returned Canvas Button Icon (Minimize Terminal) */}
+              <button
+                onClick={() => setIsPureCanvas(true)}
+                className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-400/70 shadow-[0_0_12px_rgba(0,242,255,0.35)] text-[10px] font-bold transition cursor-pointer flex items-center gap-1.5"
+                title="Minimize Terminal to Pure Canvas to View 100% Background Visualizer"
+              >
+                <Eye className="w-3.5 h-3.5 text-cyan-300" />
+                <span className="font-extrabold tracking-wide">CANVAS</span>
+              </button>
+
+              {/* Clear Console */}
+              <button
+                onClick={() => processCommand('clear')}
+                className="p-1.5 rounded-lg bg-black/40 border border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition cursor-pointer"
+                title="Clear Terminal Output (Ctrl+L)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Secondary System Options & Telemetry Toolbar (Row 2 - All Options Available to View) */}
+          <div
+            className="py-1.5 px-3 bg-black/60 border-b flex items-center justify-between gap-3 overflow-x-auto scrollbar-none text-[11px] shrink-0 select-none z-10"
+            style={{ borderColor: liveLed ? `${liveLed.primaryHex}22` : `${envState.primaryColor}22` }}
+          >
+            {/* Sensory & Audio Group */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Mic Input */}
               <button
                 onClick={handleToggleMic}
-                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
                   isMicListening
-                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                    ? 'bg-emerald-500/25 text-emerald-300 border-emerald-500/60 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
                     : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
                 }`}
-                title="Toggle Real-Time Microphone Input for Border Waveform & Voice Commands"
+                title="Toggle Real-Time Microphone Input & Audio Border Waveform"
               >
                 {isMicListening ? <Mic className="w-3 h-3 text-emerald-400 animate-pulse" /> : <MicOff className="w-3 h-3 text-slate-400" />}
-                <span className="hidden sm:inline">{isMicListening ? 'MIC ON' : 'MIC'}</span>
+                <span>{isMicListening ? 'MIC ON' : 'MIC'}</span>
               </button>
 
               {/* 963Hz Solfeggio */}
@@ -2163,18 +2682,18 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                   const on = audioVoiceService.toggle963();
                   setEnvState((prev) => ({ ...prev, solfeggio963: on }));
                 }}
-                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
                   envState.solfeggio963
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
                     : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
                 }`}
                 title="Toggle 963 Hz Solfeggio Pure Wave"
               >
-                <Volume2 className="w-3 h-3" />
-                <span className="hidden sm:inline">963Hz</span>
+                <Volume2 className="w-3 h-3 text-emerald-400" />
+                <span>963Hz</span>
               </button>
 
-              {/* Real-time D3 Stream Toggle */}
+              {/* D3 Stream */}
               <button
                 onClick={() => {
                   const next = !envState.d3Stream.active;
@@ -2184,18 +2703,18 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                   }));
                   audioVoiceService.playEarcon(next ? 'stream' : 'switch');
                 }}
-                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
                   envState.d3Stream.active
-                    ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_12px_rgba(0,242,255,0.35)]'
+                    ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.3)]'
                     : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
                 }`}
                 title="Toggle Real-Time D3.js Data Stream Background Visualizer"
               >
                 <Network className="w-3 h-3 text-cyan-400" />
-                <span className="hidden sm:inline">D3 STREAM</span>
+                <span>D3 STREAM</span>
               </button>
 
-              {/* Dynamic Sentiment Ambient Soundscape */}
+              {/* Ambient Soundscape */}
               <button
                 onClick={() => {
                   const next = !envState.ambientSoundscape;
@@ -2203,76 +2722,135 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                   if (next) ambientAudioService.start(envState.sentiment);
                   else ambientAudioService.stop();
                 }}
-                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
                   envState.ambientSoundscape
-                    ? 'bg-purple-500/25 text-purple-300 border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.35)]'
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.3)]'
                     : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
                 }`}
-                title="Toggle Web Audio Dynamic Ambient Soundscape (Reacts to Sentiment & Solfeggio)"
+                title="Toggle Web Audio Dynamic Ambient Soundscape"
               >
                 <Music className="w-3 h-3 text-purple-400" />
-                <span className="hidden lg:inline">{envState.ambientSoundscape ? `AMBIENT: ${envState.sentiment.toUpperCase()}` : 'AMBIENT'}</span>
+                <span>{envState.ambientSoundscape ? `AMBIENT: ${envState.sentiment.toUpperCase()}` : 'AMBIENT'}</span>
               </button>
+            </div>
 
-              {/* Links Text Browser Modal Trigger */}
+            {/* Knowledge & Tools Group */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Links Browser */}
               <button
                 onClick={() => {
                   setLinksInitialUrl('file:///root/gemini.md');
                   setIsLinksModalOpen(true);
                 }}
-                className="px-2 py-1 rounded-md bg-black/40 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-black/40 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
                 title="Open Links Text-Based Browser (links / lynx)"
               >
                 <BookOpen className="w-3 h-3 text-cyan-400" />
-                <span className="hidden sm:inline">LINKS</span>
+                <span>LINKS</span>
               </button>
 
-              {/* Google Drive & Memory Engrams Modal Trigger */}
+              {/* G-Drive Engrams */}
               <button
                 onClick={() => setIsEngramsModalOpen(true)}
-                className="px-2 py-1 rounded-md bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
                 title="Open Google Drive & gemini.md Memory Engrams Hub"
               >
                 <Cloud className="w-3 h-3 text-purple-400" />
-                <span className="hidden md:inline">G-DRIVE</span>
+                <span>G-DRIVE</span>
               </button>
 
-              {/* Neural Voice Profile Selector Modal */}
+              {/* Neural Voice */}
               <button
                 onClick={() => setIsVoiceModalOpen(true)}
-                className={`px-2 py-1 rounded-md border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
                   envState.voiceActive
-                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.25)]'
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/50'
                     : 'bg-black/40 text-slate-400 border-slate-800 hover:text-white'
                 }`}
-                title="Open Neural Voice & ChromeVox Profile Matrix"
+                title="Configure Neural Voice & ChromeVox Profile Matrix"
               >
                 <Radio className="w-3 h-3 text-purple-400" />
-                <span className="hidden sm:inline">VOICE: {envState.voiceProfile.toUpperCase()}</span>
+                <span>VOICE: {envState.voiceProfile.toUpperCase()}</span>
               </button>
 
-              {/* Command History Modal Trigger (Ctrl+R) */}
+              {/* Command History */}
               <button
                 onClick={() => setIsHistoryModalOpen(true)}
-                className="px-2 py-1 rounded-md bg-black/40 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-black/40 border border-slate-800 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
                 title="Open Interactive Command History Browser (Ctrl+R)"
               >
                 <HistoryIcon className="w-3 h-3 text-cyan-400" />
-                <span className="hidden md:inline">HISTORY</span>
+                <span>HISTORY</span>
               </button>
 
               {/* Quine Download */}
               <button
                 onClick={exportQuineFile}
-                className="px-2 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
                 title="Export Standalone Offline Quine HTML"
               >
-                <Download className="w-3 h-3" />
-                <span className="hidden md:inline">QUINE</span>
+                <Download className="w-3 h-3 text-amber-400" />
+                <span>QUINE</span>
               </button>
+            </div>
 
-              {/* Bloom Intensity Slider */}
-              <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-black/40 border border-slate-800">
+            {/* Lighting, HSL & Opacity Aesthetics Group */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* RGB-LED Controls */}
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/40 border border-slate-800">
+                <button
+                  onClick={() =>
+                    setEnvState((prev) => ({
+                      ...prev,
+                      rgbLed: { ...prev.rgbLed, enabled: !prev.rgbLed.enabled },
+                    }))
+                  }
+                  className="flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+                  title="Toggle Real-Time RGB-LED HSL% Engine"
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      envState.rgbLed.enabled ? 'bg-cyan-400 animate-pulse shadow-[0_0_8px_#00f2ff]' : 'bg-slate-600'
+                    }`}
+                  />
+                  <span className="text-slate-300">LED</span>
+                </button>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  value={envState.rgbLed.huePercent}
+                  onChange={(e) =>
+                    setEnvState((prev) => ({
+                      ...prev,
+                      rgbLed: { ...prev.rgbLed, enabled: true, huePercent: parseFloat(e.target.value) },
+                    }))
+                  }
+                  className="w-14 sm:w-16 h-1.5 rounded appearance-none cursor-pointer"
+                  style={{
+                    background:
+                      'linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)',
+                  }}
+                  title={`HSL Hue: ${envState.rgbLed.huePercent.toFixed(1)}%`}
+                />
+                <span className="text-[9px] text-cyan-300 font-mono">
+                  {envState.rgbLed.huePercent.toFixed(0)}%
+                </span>
+
+                <button
+                  onClick={() => setIsColorProfileModalOpen(true)}
+                  className="px-1.5 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[9px] font-bold transition cursor-pointer flex items-center gap-1"
+                  title={`Color Profile: ${envState.rgbLed.profile} - Click to configure`}
+                >
+                  <Palette className="w-2.5 h-2.5 text-cyan-400" />
+                  <span>{envState.rgbLed.profile}</span>
+                </button>
+              </div>
+
+              {/* Glow Bloom Slider */}
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/40 border border-slate-800">
                 <Sparkles className="w-3 h-3 text-amber-400" />
                 <input
                   type="range"
@@ -2280,55 +2858,61 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                   max="4"
                   step="0.1"
                   value={envState.bloomIntensity}
-                  onChange={(e) => setEnvState(prev => ({ ...prev, bloomIntensity: parseFloat(e.target.value) }))}
-                  className="w-16 h-1 accent-amber-500 cursor-pointer"
+                  onChange={(e) => setEnvState((prev) => ({ ...prev, bloomIntensity: parseFloat(e.target.value) }))}
+                  className="w-12 h-1 accent-amber-500 cursor-pointer"
                   title={`Glow Intensity: ${envState.bloomIntensity.toFixed(1)}`}
                 />
-                <span className="text-[9px] text-amber-300 font-mono hidden xl:inline">GLOW</span>
+                <span className="text-[9px] text-amber-300 font-mono">GLOW</span>
               </div>
 
-              {/* Opacity Cycle */}
-              <button
-                onClick={() => {
-                  const next = envState.terminalOpacity <= 0.3 ? 0.85 : envState.terminalOpacity <= 0.6 ? 0.95 : 0.25;
-                  setEnvState((prev) => ({ ...prev, terminalOpacity: next }));
-                }}
-                className="px-2 py-1 rounded-md bg-black/40 border border-slate-800 text-slate-300 hover:text-white text-[10px] transition cursor-pointer"
-                title="Cycle Glass Opacity"
-              >
-                {(envState.terminalOpacity * 100).toFixed(0)}%
-              </button>
-
-              {/* Pure Canvas (Hide Terminal) */}
-              <button
-                onClick={() => setIsPureCanvas(true)}
-                className="px-2 py-1 rounded-md bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
-                title="Hide Terminal to admire 100% Visual Renderer"
-              >
-                <Eye className="w-3 h-3" />
-                <span className="hidden md:inline">CANVAS</span>
-              </button>
-
-              {/* Dock State Toggle */}
-              <button
-                onClick={() => {
-                  const next = envState.terminalDock === 'bottom' ? 'floating' : envState.terminalDock === 'floating' ? 'fullscreen' : 'bottom';
-                  setEnvState((prev) => ({ ...prev, terminalDock: next }));
-                }}
-                className="p-1 rounded text-slate-400 hover:text-white cursor-pointer"
-                title="Toggle Dock Layout (Bottom / Float / Fullscreen)"
-              >
-                {envState.terminalDock === 'fullscreen' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </button>
-
-              {/* Clear */}
-              <button
-                onClick={() => processCommand('clear')}
-                className="p-1 rounded text-slate-400 hover:text-rose-400 cursor-pointer"
-                title="Clear Terminal Output (Ctrl+L)"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {/* Opacity Presets Selector */}
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/40 border border-slate-800 text-[9px]">
+                <span className="text-slate-400 font-mono mr-0.5">GLASS:</span>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalOpacity: 0.05 }))}
+                  className={`px-1.5 py-0.5 rounded transition cursor-pointer font-bold ${
+                    isClearMode
+                      ? 'bg-amber-500 text-slate-950 shadow-[0_0_6px_rgba(251,191,36,0.5)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Make terminal ultra-clear (5% opacity)"
+                >
+                  CLEAR
+                </button>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalOpacity: 0.5 }))}
+                  className={`px-1.5 py-0.5 rounded transition cursor-pointer font-bold ${
+                    envState.terminalOpacity > 0.15 && envState.terminalOpacity <= 0.6
+                      ? 'bg-cyan-500 text-slate-950 shadow-[0_0_6px_rgba(0,242,255,0.5)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="50% Glass opacity"
+                >
+                  50%
+                </button>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalOpacity: 0.85 }))}
+                  className={`px-1.5 py-0.5 rounded transition cursor-pointer font-bold ${
+                    envState.terminalOpacity > 0.6 && envState.terminalOpacity <= 0.9
+                      ? 'bg-cyan-500 text-slate-950 shadow-[0_0_6px_rgba(0,242,255,0.5)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="85% Default opacity"
+                >
+                  85%
+                </button>
+                <button
+                  onClick={() => setEnvState((prev) => ({ ...prev, terminalOpacity: 1.0 }))}
+                  className={`px-1.5 py-0.5 rounded transition cursor-pointer font-bold ${
+                    envState.terminalOpacity > 0.9
+                      ? 'bg-cyan-500 text-slate-950 shadow-[0_0_6px_rgba(0,242,255,0.5)]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="100% Solid opacity"
+                >
+                  100%
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2459,6 +3043,8 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
                 query={inputVal}
                 primaryColor={envState.primaryColor}
                 secondaryColor={envState.secondaryColor}
+                envState={envState}
+                mountedDevices={envState.mountedDevices}
               />
             )}
 
@@ -2469,6 +3055,45 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
               <span className="text-amber-400 hidden lg:inline">({envState.sentiment})</span>
               <span className="text-rose-500 font-black">$</span>
             </div>
+
+            {/* Quick Toggle for Context-Adaptive Command Autocomplete Radar */}
+            <button
+              type="button"
+              onClick={() => {
+                if (showSuggestions) {
+                  setShowSuggestions(false);
+                  setSelectedSuggestionIndex(-1);
+                } else {
+                  const currentFiles = (() => {
+                    try {
+                      return vfs.listDir(activeInstance.cwd, '.').map((f) => (f.isDir ? `${f.name}/` : f.name));
+                    } catch {
+                      return [];
+                    }
+                  })();
+                  const matches = getCommandSuggestions(inputVal, 10, {
+                    envState,
+                    mountedDevices: envState.mountedDevices,
+                    vfsFiles: currentFiles,
+                    cwd: activeInstance.cwd,
+                    isMicListening,
+                  });
+                  setSuggestions(matches);
+                  setShowSuggestions(matches.length > 0);
+                  setSelectedSuggestionIndex(matches.length > 0 ? 0 : -1);
+                  audioVoiceService.playTone(880, 'sine', 35);
+                }
+              }}
+              className={`px-2 py-1 rounded-lg border text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
+                showSuggestions
+                  ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/60 shadow-[0_0_12px_rgba(0,242,255,0.35)]'
+                  : 'bg-black/60 text-slate-400 border-slate-800 hover:text-cyan-300 hover:border-cyan-500/40'
+              }`}
+              title="Toggle Adaptive Command Autocomplete Radar (Tab / Ctrl+Space)"
+            >
+              <Sparkles className="w-3 h-3 text-cyan-400 animate-pulse" />
+              <span className="hidden sm:inline">RADAR</span>
+            </button>
 
             {/* Real-Time Syntax Highlighter & Input with Ghost Autocomplete */}
             <TerminalSyntaxInput
@@ -2516,8 +3141,8 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
             d3Stream: { ...prev.d3Stream, ...updated },
           }))
         }
-        primaryColor={envState.primaryColor}
-        secondaryColor={envState.secondaryColor}
+        primaryColor={liveLed ? liveLed.primaryHex : envState.primaryColor}
+        secondaryColor={liveLed ? liveLed.secondaryHex : envState.secondaryColor}
         sentiment={envState.sentiment}
       />
 
@@ -2587,6 +3212,19 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
           inputRef.current?.focus();
         }}
         onEngramsUpdated={(txt) => setEngramsMarkdown(txt)}
+      />
+
+      {/* High-End Rendering Color Profiles & RGB-LED Engine Modal */}
+      <ColorProfileModal
+        isOpen={isColorProfileModalOpen}
+        onClose={() => setIsColorProfileModalOpen(false)}
+        config={envState.rgbLed}
+        onChange={(updated) =>
+          setEnvState((prev) => ({
+            ...prev,
+            rgbLed: { ...prev.rgbLed, ...updated },
+          }))
+        }
       />
 
       {/* ChromeVox Screen Reader ARIA Live Announcer Region */}

@@ -1,6 +1,8 @@
 /**
  * HyperTerminal Polyglot Quine OS - Types & Interfaces
  */
+import type { RgbLedConfig, RgbLedProfile, RgbLedMode } from '../services/colorProfileService';
+export type { RgbLedConfig, RgbLedProfile, RgbLedMode };
 
 export type TopologyType =
   | 'torus'
@@ -76,7 +78,7 @@ export interface EnvironmentState {
   bloomIntensity: number;
   audioReactiveLevel: number;
   terminalOpacity: number;
-  terminalDock: 'bottom' | 'floating' | 'fullscreen';
+  terminalDock: 'center' | 'bottom' | 'floating' | 'fullscreen';
   highContrast: boolean;
   chromeVoxEnabled: boolean;
   d3Stream: D3StreamConfig;
@@ -84,6 +86,7 @@ export interface EnvironmentState {
   ambientVolume: number;
   harmonicResonance: '432' | '528' | '963' | 'all';
   mountedDevices: string[];
+  rgbLed: RgbLedConfig;
 }
 
 export interface LinksBrowserPage {

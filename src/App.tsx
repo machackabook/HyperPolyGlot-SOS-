@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { EnvironmentState } from './types';
+import { DEFAULT_RGB_LED_CONFIG } from './services/colorProfileService';
 
 export function App() {
   // Global Environment State governing the 100% Background Visual Renderer & Terminal
@@ -26,13 +27,14 @@ export function App() {
     bloomIntensity: 1.2,
     audioReactiveLevel: 1.0,
     terminalOpacity: 0.85,
-    terminalDock: 'bottom',
+    terminalDock: 'center',
     highContrast: false,
     chromeVoxEnabled: false,
     ambientSoundscape: false,
     ambientVolume: 0.35,
     harmonicResonance: '432',
     mountedDevices: ['/mnt/nexus_drive', '/mnt/recovery', '/mnt/httpdfs'],
+    rgbLed: DEFAULT_RGB_LED_CONFIG,
     d3Stream: {
       active: false,
       shape: 'force',

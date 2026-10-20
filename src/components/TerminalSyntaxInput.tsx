@@ -23,7 +23,7 @@ export const TerminalSyntaxInput: React.FC<TerminalSyntaxInputProps> = ({
   onKeyDown,
   onSubmit,
   ghostSuggestion = '',
-  placeholder = "Enter command or speak (e.g. 'help', 'render tesseract', 'mic on')...",
+  placeholder = "Enter command or press Tab / RADAR for adaptive suggestions (e.g. 'cd /mnt/nexus_drive', 'render tesseract')...",
   inputRef: externalInputRef,
   disabled = false,
 }) => {
