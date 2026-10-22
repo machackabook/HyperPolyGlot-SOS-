@@ -1,0 +1,61 @@
+name: Publish HyperPolyGlot Quine OS (main only)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hyperpolyglot-pages-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact HyperPolyGlot application
+        uses: actions/checkout@v4
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Validate application and Cloudflare adapter
+        run: |
+          node --check src/cloudflare-public-worker.mjs
+          node --test tests/cloudflare-public.test.mjs
+      - name: Build actual AI Studio React/TSX application
+        env:
+          GITHUB_PAGES: 'true'
+        run: bun run build
+      - name: Validate compiled torus-knot deployment
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          test -d dist/assets
+          grep -q '/HyperPolyGlot-SOS-/assets/' dist/index.html
+          grep -q 'TorusKnotGeometry' src/components/VisualRenderer3D.tsx
+          test -n "$(find dist/assets -maxdepth 1 -type f -name '*.js' -print -quit)"
+          touch dist/.nojekyll
+          printf 'SOURCE_REVISION=%s\n' "$GITHUB_SHA" > dist/build-revision.txt
+      - name: Publish compiled output only (never raw TSX or Jekyll)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy verified Vite bundle
+        id: deployment
+        uses: actions/deploy-pages@v4
