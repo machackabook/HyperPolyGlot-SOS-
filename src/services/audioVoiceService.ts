@@ -439,8 +439,6 @@ class AudioVoiceService {
   // MICROPHONE INPUT & REAL-TIME AUDIO WAVEFORM ANALYSIS
   // =========================================================================
 
-  private isSyntheticMic = false;
-  private syntheticTime = 0;
 
   public async startMicrophone(): Promise<boolean> {
     const ctx = this.initContext();
@@ -468,7 +466,6 @@ class AudioVoiceService {
 
         this.micSourceNode.connect(this.micAnalyser);
 
-        this.isSyntheticMic = false;
         this.isMicActive = true;
         this.notifyMicChange(true, 0);
 
@@ -476,17 +473,10 @@ class AudioVoiceService {
         return true;
       }
     } catch (err) {
-      console.warn('Physical microphone unavailable, engaging synthetic acoustic analyzer:', err);
+      console.warn('Microphone access failed; input remains disabled:', err);
     }
-
-    // Graceful acoustic fallback mode: creates active 256-bin buffers
-    this.micFrequencyData = new Uint8Array(128);
-    this.micWaveformData = new Uint8Array(256);
-    this.isSyntheticMic = true;
-    this.isMicActive = true;
-    this.notifyMicChange(true, 0.4);
-
-    return true;
+    this.stopMicrophone();
+    return false;
   }
 
   public stopMicrophone(): void {
@@ -505,7 +495,6 @@ class AudioVoiceService {
       this.isRecognizing = false;
     }
     this.isMicActive = false;
-    this.isSyntheticMic = false;
     this.notifyMicChange(false, 0);
   }
 
@@ -531,7 +520,7 @@ class AudioVoiceService {
       return null;
     }
 
-    if (!this.isSyntheticMic && this.micAnalyser) {
+    if (this.micAnalyser) {
       (this.micAnalyser as any).getByteFrequencyData(this.micFrequencyData);
       (this.micAnalyser as any).getByteTimeDomainData(this.micWaveformData);
 
@@ -551,27 +540,8 @@ class AudioVoiceService {
         waveformData: this.micWaveformData,
         isSpeaking,
       };
-    } else {
-      // Synthetic acoustic voice oscillation for simulated/headless environments
-      this.syntheticTime += 0.05;
-      const t = this.syntheticTime;
-      const voiceVol = 0.35 + Math.sin(t * 3.5) * 0.25 + (Math.sin(t * 8.2) > 0.3 ? 0.3 : 0);
-
-      for (let i = 0; i < this.micWaveformData.length; i++) {
-        const wave = Math.sin(t * 14 + i * 0.12) * 48 * voiceVol + Math.cos(t * 6 + i * 0.25) * 25 * voiceVol;
-        this.micWaveformData[i] = Math.max(0, Math.min(255, Math.floor(128 + wave)));
-      }
-      for (let i = 0; i < this.micFrequencyData.length; i++) {
-        this.micFrequencyData[i] = Math.floor((Math.sin(t * 4 + i * 0.2) * 0.5 + 0.5) * 180 * voiceVol);
-      }
-
-      return {
-        volume: voiceVol,
-        frequencyData: this.micFrequencyData,
-        waveformData: this.micWaveformData,
-        isSpeaking: voiceVol > 0.2,
-      };
     }
+    return null;
   }
 
   // =========================================================================

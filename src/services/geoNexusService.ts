@@ -27,7 +27,7 @@ class GeoNexusService {
   private listeners: ((telemetry: GeoTelemetry) => void)[] = [];
 
   constructor() {
-    this.startTracking();
+    // Geolocation is requested only after explicit geo-sync activation.
   }
 
   public onTelemetryChange(cb: (telemetry: GeoTelemetry) => void) {
@@ -115,6 +115,7 @@ class GeoNexusService {
   }
 
   public async syncTerminalWithGeo() {
+    await this.startTracking();
     audioVoiceService.speak(`Synchronizing terminal with physical coordinates at ${this.telemetry.plusCode}. Initializing Earth descent protocol.`);
     return this.telemetry;
   }
