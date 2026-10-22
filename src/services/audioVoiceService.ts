@@ -20,6 +20,49 @@ export interface VoiceAudioData {
   carrierFreq: number;
 }
 
+export type WakeWordState = 'passive' | 'active';
+
+export interface WakeWordParseResult {
+  hasWakeWord: boolean;
+  wakeWord?: string;
+  remainder: string;
+  isStandaloneWake: boolean;
+}
+
+/**
+ * Lightweight Wake-Word Parser:
+ * Detects wake words ('gemini', 'terminal', 'nexus', 'computer', 'nova')
+ * and extracts the downstream command or directive.
+ */
+export function parseWakeWord(text: string): WakeWordParseResult {
+  const clean = text.trim();
+  if (!clean) {
+    return { hasWakeWord: false, remainder: '', isStandaloneWake: false };
+  }
+
+  // Regex matching wake words at start or embedded
+  // Supports: "Gemini", "Hey Gemini", "Terminal", "Hey Terminal", "Nexus", "Computer", "Nova"
+  const regex = /^(?:.*?\b)?(?:hey\s+)?(gemini|terminal|nexus|computer|nova)\b[\s,:;—\-]*(.*)$/i;
+  const match = clean.match(regex);
+
+  if (match) {
+    const matchedWord = match[1].toLowerCase();
+    const rest = (match[2] || '').trim().replace(/^[,:;—\-]+/, '').trim();
+    return {
+      hasWakeWord: true,
+      wakeWord: matchedWord,
+      remainder: rest,
+      isStandaloneWake: rest.length === 0,
+    };
+  }
+
+  return {
+    hasWakeWord: false,
+    remainder: clean,
+    isStandaloneWake: false,
+  };
+}
+
 class AudioVoiceService {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
@@ -28,8 +71,8 @@ class AudioVoiceService {
   private frequencyData: Uint8Array | null = null;
   private is963Active = false;
   private isVoiceEnabled = true;
-  private pitch = 1.0;
-  private rate = 1.05;
+  private pitch = 1.15;
+  private rate = 1.02;
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private speechListeners: ((speaking: boolean, text: string) => void)[] = [];
   private speechLogListeners: ((text: string) => void)[] = [];
@@ -71,12 +114,33 @@ class AudioVoiceService {
   private loadVoice(): void {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     const voices = window.speechSynthesis.getVoices();
-    // Prefer English natural voices if available
-    const preferred = voices.find(
+    // Prioritize high-quality English female natural voices
+    const femaleVoice = voices.find(
       (v) =>
         v.lang.startsWith('en') &&
-        (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Samantha') || v.name.includes('Daniel'))
-    ) || voices.find((v) => v.lang.startsWith('en')) || voices[0];
+        (v.name.toLowerCase().includes('female') ||
+          v.name.toLowerCase().includes('zira') ||
+          v.name.toLowerCase().includes('samantha') ||
+          v.name.toLowerCase().includes('victoria') ||
+          v.name.toLowerCase().includes('karen') ||
+          v.name.toLowerCase().includes('ava') ||
+          v.name.toLowerCase().includes('jenny') ||
+          v.name.toLowerCase().includes('sonia') ||
+          v.name.toLowerCase().includes('allison') ||
+          v.name.toLowerCase().includes('susan') ||
+          v.name.toLowerCase().includes('fiona'))
+    );
+
+    const preferred =
+      femaleVoice ||
+      voices.find(
+        (v) =>
+          v.lang.startsWith('en') &&
+          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural'))
+      ) ||
+      voices.find((v) => v.lang.startsWith('en')) ||
+      voices[0];
+
     if (preferred) {
       this.selectedVoice = preferred;
     }
@@ -552,7 +616,13 @@ class AudioVoiceService {
         // Automatically restart speech recognition while mic is active
         if (this.isMicActive && this.recognition) {
           try {
-            this.recognition.start();
+            setTimeout(() => {
+              if (this.isMicActive && this.recognition) {
+                try {
+                  this.recognition.start();
+                } catch {}
+              }
+            }, 100);
           } catch {}
         } else {
           this.isRecognizing = false;
@@ -574,6 +644,10 @@ class AudioVoiceService {
   }
 
   private notifyTranscript(transcript: string, isFinal: boolean): void {
+    // Suppress AI hearing its own synthesized voice to prevent acoustic feedback loop
+    if (this.isVoiceSpeaking) {
+      return;
+    }
     this.transcriptListeners.forEach((cb) => cb(transcript, isFinal));
   }
 
@@ -589,13 +663,100 @@ class AudioVoiceService {
   }
 
   // =========================================================================
+  // LIGHTWEIGHT WAKE-WORD LISTENER (PASSIVE UNTIL ADDRESSED)
+  // =========================================================================
+
+  private isWakeWordGated = true; // remains passively listening until addressed
+  private wakeWordState: WakeWordState = 'passive';
+  private wakeWordTimeoutMs = 12000; // 12 seconds active speech dwell time
+  private wakeTimer: any = null;
+  private wakeListeners: ((state: WakeWordState, wakeWord?: string) => void)[] = [];
+
+  public isWakeWordEnabled(): boolean {
+    return this.isWakeWordGated;
+  }
+
+  public setWakeWordEnabled(enabled: boolean): void {
+    this.isWakeWordGated = enabled;
+    if (!enabled) {
+      this.activateWakeState('open_mic');
+    } else {
+      this.deactivateWakeState();
+    }
+  }
+
+  public getWakeWordState(): WakeWordState {
+    return this.wakeWordState;
+  }
+
+  public getWakeWordTimeout(): number {
+    return Math.round(this.wakeWordTimeoutMs / 1000);
+  }
+
+  public setWakeWordTimeout(sec: number): void {
+    this.wakeWordTimeoutMs = Math.max(3, Math.min(120, sec)) * 1000;
+  }
+
+  public activateWakeState(wakeWord = 'gemini'): void {
+    this.wakeWordState = 'active';
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer);
+    }
+    this.wakeTimer = setTimeout(() => {
+      this.deactivateWakeState();
+    }, this.wakeWordTimeoutMs);
+
+    this.notifyWakeWordChange('active', wakeWord);
+  }
+
+  public touchWakeActivity(): void {
+    if (this.wakeWordState === 'active') {
+      if (this.wakeTimer) {
+        clearTimeout(this.wakeTimer);
+      }
+      this.wakeTimer = setTimeout(() => {
+        this.deactivateWakeState();
+      }, this.wakeWordTimeoutMs);
+    }
+  }
+
+  public deactivateWakeState(): void {
+    this.wakeWordState = 'passive';
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer);
+      this.wakeTimer = null;
+    }
+    this.notifyWakeWordChange('passive');
+  }
+
+  public onWakeWordChange(cb: (state: WakeWordState, wakeWord?: string) => void): () => void {
+    this.wakeListeners.push(cb);
+    return () => {
+      this.wakeListeners = this.wakeListeners.filter((l) => l !== cb);
+    };
+  }
+
+  private notifyWakeWordChange(state: WakeWordState, wakeWord?: string): void {
+    this.wakeListeners.forEach((cb) => cb(state, wakeWord));
+  }
+
+  // =========================================================================
   // VOICE PROFILES & ACCESSIBILITY SUBSYSTEM
   // =========================================================================
 
-  private currentProfileId = 'sovereign';
+  private currentProfileId = 'gemini_female';
   private announcerListeners: ((message: string, assertive: boolean) => void)[] = [];
 
   public static readonly PROFILES: Record<string, { id: string; name: string; pitch: number; rate: number; carrierFreq: number; description: string; style: string }> = {
+    gemini_female: {
+      id: 'gemini_female',
+      name: 'Gemini Neural (Female)',
+      pitch: 1.15,
+      rate: 1.02,
+      carrierFreq: 528,
+      description: 'Natural interactive female neural voice with 528Hz Solfeggio carrier, tuned for conversational flow',
+      style: 'from-fuchsia-400 to-cyan-400',
+    },
     sovereign: {
       id: 'sovereign',
       name: 'Sovereign Core',
@@ -768,6 +929,7 @@ class AudioVoiceService {
       utterance.onend = () => {
         this.stopVoiceAudioStream();
         this.notifySpeech(false, '');
+        this.touchWakeActivity();
         resolve();
       };
 

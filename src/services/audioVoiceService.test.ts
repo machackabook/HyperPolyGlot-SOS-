@@ -31,14 +31,15 @@ test('pitch and rate parameters clamp within standard boundary [0.5, 2.0]', () =
   assert.equal(clamp(1.2), 1.2);
 });
 
-test('voice profiles include all 4 personas with harmonic carrier frequencies', () => {
+test('voice profiles include all 5 personas with harmonic carrier frequencies', () => {
   const profiles = [
+    { id: 'gemini_female', freq: 528 },
     { id: 'sovereign', freq: 432 },
     { id: 'quantum', freq: 528 },
     { id: 'cyber', freq: 963 },
     { id: 'tranquil', freq: 639 },
   ];
-  assert.equal(profiles.length, 4);
+  assert.equal(profiles.length, 5);
   assert.ok(profiles.every((p) => p.freq > 400 && p.freq < 1000));
 });
 
@@ -52,5 +53,46 @@ test('voice audio frequency blending aggregates max energy per bin', () => {
   assert.equal(out[0], 80);
   assert.equal(out[1], 120);
   assert.equal(out[2], 240);
+});
+
+// Import parseWakeWord helper
+import { parseWakeWord } from './audioVoiceService.js';
+
+test('parseWakeWord detects standalone wake word "Gemini" and "Terminal"', () => {
+  const res1 = parseWakeWord('Gemini');
+  assert.equal(res1.hasWakeWord, true);
+  assert.equal(res1.wakeWord, 'gemini');
+  assert.equal(res1.isStandaloneWake, true);
+  assert.equal(res1.remainder, '');
+
+  const res2 = parseWakeWord('Hey Terminal');
+  assert.equal(res2.hasWakeWord, true);
+  assert.equal(res2.wakeWord, 'terminal');
+  assert.equal(res2.isStandaloneWake, true);
+});
+
+test('parseWakeWord extracts directive when addressed with compound phrase', () => {
+  const res1 = parseWakeWord('Gemini, render torus');
+  assert.equal(res1.hasWakeWord, true);
+  assert.equal(res1.wakeWord, 'gemini');
+  assert.equal(res1.isStandaloneWake, false);
+  assert.equal(res1.remainder, 'render torus');
+
+  const res2 = parseWakeWord('Hey Terminal: satcom ping');
+  assert.equal(res2.hasWakeWord, true);
+  assert.equal(res2.wakeWord, 'terminal');
+  assert.equal(res2.remainder, 'satcom ping');
+
+  const res3 = parseWakeWord('Computer explain quantum gravity');
+  assert.equal(res3.hasWakeWord, true);
+  assert.equal(res3.wakeWord, 'computer');
+  assert.equal(res3.remainder, 'explain quantum gravity');
+});
+
+test('parseWakeWord returns false for ambient background chatter without wake word', () => {
+  const res = parseWakeWord('what time is the meeting tomorrow');
+  assert.equal(res.hasWakeWord, false);
+  assert.equal(res.isStandaloneWake, false);
+  assert.equal(res.remainder, 'what time is the meeting tomorrow');
 });
 

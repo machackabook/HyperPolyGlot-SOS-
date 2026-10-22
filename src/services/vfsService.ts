@@ -251,6 +251,174 @@ PRETTY_NAME="HyperTerminal WebGL/WASM 4D Sovereign OS"`,
           }, null, 2),
           metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 256 },
         },
+        'openwrt_release': {
+          type: 'file',
+          content: `DISTRIB_ID='OpenWrt'
+DISTRIB_RELEASE='23.05.3'
+DISTRIB_REVISION='r23809-234f1a2'
+DISTRIB_TARGET='x86/64'
+DISTRIB_ARCH='x86_64'
+DISTRIB_DESCRIPTION='OpenWrt 23.05.3 r23809-234f1a2'
+DISTRIB_TAINTS=''`,
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'r--r--r--', size: 180 },
+        },
+        config: {
+          type: 'directory',
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 4096 },
+          children: {
+            firewall: {
+              type: 'file',
+              content: `config defaults
+	option syn_flood '1'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option drop_invalid '1'
+
+config zone
+	option name 'lan'
+	list network 'lan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+
+config zone
+	option name 'wan'
+	list network 'wan'
+	list network 'wan6'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option masq '1'
+	option mtu_fix '1'
+
+config forwarding
+	option src 'lan'
+	option dest 'wan'
+
+config rule
+	option name 'Allow-DHCP-Renew'
+	option src 'wan'
+	option proto 'udp'
+	option dest_port '68'
+	option target 'ACCEPT'
+
+config rule
+	option name 'Block-WAN-SSH'
+	option src 'wan'
+	option proto 'tcp'
+	option dest_port '22'
+	option target 'DROP'
+
+config rule
+	option name 'Block-WAN-LuCI'
+	option src 'wan'
+	option proto 'tcp'
+	option dest_port '80 443'
+	option target 'DROP'`,
+              metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 750 },
+            },
+            network: {
+              type: 'file',
+              content: `config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth1'
+	list ports 'eth2'
+	list ports 'eth3'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '192.168.1.1'
+	option netmask '255.255.255.0'
+	option ip6assign '60'
+
+config interface 'wan'
+	option device 'eth0'
+	option proto 'dhcp'`,
+              metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 420 },
+            },
+            wireless: {
+              type: 'file',
+              content: `config wifi-device 'radio0'
+	option type 'mac80211'
+	option path 'pci0000:00/0000:00:1c.0'
+	option channel '36'
+	option band '5g'
+	option htmode 'HE80'
+	option country 'US'
+
+config wifi-iface 'default_radio0'
+	option device 'radio0'
+	option network 'lan'
+	option mode 'ap'
+	option ssid 'HyperTerminal-SecNet'
+	option encryption 'sae'
+	option ieee80211w '2'`,
+              metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 360 },
+            },
+          },
+        },
+        ssh: {
+          type: 'directory',
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 4096 },
+          children: {
+            'ssh_config': {
+              type: 'file',
+              content: `Host gateway 192.168.1.1
+	HostName 192.168.1.1
+	User root
+	Port 22
+	IdentityFile ~/.ssh/id_ed25519
+	ServerAliveInterval 15
+	ServerAliveCountMax 3
+	Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+
+Host kali 192.168.1.150
+	HostName 192.168.1.150
+	User kali
+	Port 22
+	IdentityFile ~/.ssh/id_ed25519`,
+              metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 320 },
+            },
+          },
+        },
+        security: {
+          type: 'directory',
+          metadata: { created: Date.now(), modified: Date.now(), permissions: 'rwxr-xr-x', size: 4096 },
+          children: {
+            'hardening_guide.md': {
+              type: 'file',
+              content: `# HyperTerminal & OpenWrt Gateway Defensive Hardening Matrix
+
+## 1. Network Gateway Posture (192.168.1.1)
+- **Firewall**: Default DROP policy on WAN; SYN-flood cookies enabled.
+- **SSH**: Key-only authentication via Ed25519; Root password login disabled over WAN.
+- **Wireless**: WPA3-SAE enforced with PMF (Protected Management Frames) mandatory (\`ieee80211w=2\`).
+- **DNS**: DNS-over-HTTPS / DNS-over-TLS enabled to prevent ISP eavesdropping and spoofing.
+
+## 2. Host Kernel Defenses
+- \`net.ipv4.tcp_syncookies = 1\` (DDoS SYN-flood mitigation)
+- \`net.ipv4.conf.all.rp_filter = 1\` (Reverse path source validation against IP spoofing)
+- \`net.ipv4.conf.all.accept_redirects = 0\` (Prevent malicious ICMP redirect route manipulation)
+- \`net.ipv4.conf.all.send_redirects = 0\` (Prevent router ICMP leakages)
+
+## 3. Kali Workload Defensive Capabilities
+- **Suricata**: Real-time intrusion detection and packet signature anomaly alerts.
+- **Wireshark/Tshark**: Low-latency internal capture of ARP anomalies and rogue broadcast storms.
+- **Lynis**: Local audit compliance score baseline target >= 85/100.
+`,
+              metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 1100 },
+            },
+          },
+        },
       },
     },
     bin: {
@@ -295,9 +463,11 @@ class VfsService {
 
   private load(): VfsNode {
     try {
-      const stored = localStorage.getItem(VFS_STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(VFS_STORAGE_KEY);
+        if (stored) {
+          return JSON.parse(stored);
+        }
       }
     } catch (e) {
       console.warn('VFS parse failed, loading initial state', e);
@@ -307,7 +477,9 @@ class VfsService {
 
   public save(): void {
     try {
-      localStorage.setItem(VFS_STORAGE_KEY, JSON.stringify(this.root));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(VFS_STORAGE_KEY, JSON.stringify(this.root));
+      }
     } catch (e) {
       console.error('Failed to save VFS to localStorage', e);
     }

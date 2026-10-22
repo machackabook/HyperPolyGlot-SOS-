@@ -43,7 +43,7 @@ import {
   D3StreamShape,
 } from '../types';
 import { vfs } from '../services/vfsService';
-import { audioVoiceService } from '../services/audioVoiceService';
+import { audioVoiceService, parseWakeWord, WakeWordState } from '../services/audioVoiceService';
 import { ambientAudioService } from '../services/ambientAudioService';
 import { omniNexusService } from '../services/omniNexusService';
 import { exportQuineFile } from '../services/quineService';
@@ -51,6 +51,12 @@ import { getCommandSuggestions, CommandSuggestion } from '../services/autocomple
 import { geoNexusService } from '../services/geoNexusService';
 import { computeRgbLedState, COLOR_PROFILES, RgbLedProfile, RgbLedMode } from '../services/colorProfileService';
 import { youtubeService, YOUTUBE_PRESET_TRACKS, CURATED_DYNAMIC_PLAYLISTS } from '../services/youtubeService';
+import { netSecService } from '../services/netSecService';
+import { sshService } from '../services/sshService';
+import { sparsebundleService } from '../services/sparsebundleService';
+import { primeCompressor } from '../services/primeMathCompressor';
+import { iterationStateService } from '../services/iterationStateService';
+import { pipelineEngine } from '../services/pipelineEngine';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
@@ -60,6 +66,7 @@ import { VoiceProfileModal } from './VoiceProfileModal';
 import { LinksBrowserModal } from './LinksBrowserModal';
 import { GoogleDriveEngramsModal, MASTER_GEMINI_MD_DEFAULT } from './GoogleDriveEngramsModal';
 import { ColorProfileModal } from './ColorProfileModal';
+import { NetworkSecurityDashboard } from './NetworkSecurityDashboard';
 
 interface HyperTerminalProps {
   envState: EnvironmentState;
@@ -70,12 +77,136 @@ const BUILTIN_COMMANDS = [
   'help', 'clear', 'ls', 'cd', 'pwd', 'cat', 'touch', 'mkdir', 'rm', 'edit',
   'tree', 'find', 'grep', 'vfs', 'render', 'sentiment', 'color', 'gravity',
   'speed', 'turbulence', 'burst', 'calm', 'shatter', 'gemini', 'ask', 'ai',
-  'voice', 'speak', 'mic', 'listen', '963', 'node', 'js', 'git', 'singularity', 'satcom',
+  'voice', 'speak', 'mic', 'listen', 'wakeword', '963', 'node', 'js', 'git', 'singularity', 'satcom',
   'swarm', 'arbitrage', 'voip', 'mcp', 'macro', 'quine', 'telemetry', 'date', 'uptime',
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
-  'rgbled', 'profile'
+  'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard'
 ];
+
+export interface SentimentVisualConfig {
+  filter: string;
+  boxShadow: string;
+  borderColor: string;
+  badgeLabel: string;
+  glyph: string;
+  accentColor: string;
+  auraGradient: string;
+}
+
+export function getSentimentVisualConfig(
+  sentiment: SentimentType,
+  isClearMode: boolean,
+  highContrast: boolean
+): SentimentVisualConfig {
+  if (highContrast) {
+    return {
+      filter: 'none',
+      boxShadow: '0 0 30px rgba(0, 242, 255, 0.5), inset 0 0 20px rgba(0, 242, 255, 0.2)',
+      borderColor: '#00f2ff',
+      badgeLabel: 'HIGH CONTRAST MATRIX',
+      glyph: '⚡',
+      accentColor: '#00f2ff',
+      auraGradient: 'linear-gradient(90deg, #00f2ff, #ffffff)',
+    };
+  }
+
+  switch (sentiment) {
+    case 'creative':
+      return {
+        // Ethereal iridescent violet-magenta hue with rich saturation and warm presence
+        filter: isClearMode ? 'none' : 'hue-rotate(310deg) saturate(1.35) brightness(1.05) contrast(1.04)',
+        boxShadow: isClearMode
+          ? '0 0 35px rgba(192, 132, 252, 0.35), inset 0 0 20px rgba(192, 132, 252, 0.1)'
+          : '0 10px 45px rgba(0, 0, 0, 0.85), 0 0 38px rgba(192, 132, 252, 0.35), 0 0 16px rgba(244, 63, 94, 0.22)',
+        borderColor: 'rgba(192, 132, 252, 0.55)',
+        badgeLabel: 'GEMINI INTERACTIVE // CREATIVE SYNAPSE',
+        glyph: '✨',
+        accentColor: '#c084fc',
+        auraGradient: 'linear-gradient(90deg, #c084fc, #f43f5e, #00f2ff)',
+      };
+    case 'energetic':
+      return {
+        // Golden solar flare with boosted saturation and lively warmth
+        filter: isClearMode ? 'none' : 'hue-rotate(35deg) saturate(1.45) brightness(1.10) contrast(1.08)',
+        boxShadow: isClearMode
+          ? '0 0 35px rgba(245, 158, 11, 0.35), inset 0 0 20px rgba(245, 158, 11, 0.1)'
+          : '0 10px 42px rgba(0, 0, 0, 0.85), 0 0 42px rgba(245, 158, 11, 0.42), 0 0 20px rgba(239, 68, 68, 0.22)',
+        borderColor: 'rgba(245, 158, 11, 0.55)',
+        badgeLabel: 'ENERGETIC SURGE // OVERCLOCKED',
+        glyph: '🔥',
+        accentColor: '#f59e0b',
+        auraGradient: 'linear-gradient(90deg, #f59e0b, #ef4444, #fbbf24)',
+      };
+    case 'alarm':
+      return {
+        // Critical crimson alert shift with high contrast and edge glow
+        filter: isClearMode ? 'none' : 'hue-rotate(345deg) saturate(1.75) brightness(1.08) contrast(1.22)',
+        boxShadow: isClearMode
+          ? '0 0 40px rgba(239, 68, 68, 0.45), inset 0 0 25px rgba(239, 68, 68, 0.2)'
+          : '0 10px 45px rgba(0, 0, 0, 0.85), 0 0 50px rgba(239, 68, 68, 0.55), inset 0 0 25px rgba(239, 68, 68, 0.18)',
+        borderColor: 'rgba(239, 68, 68, 0.68)',
+        badgeLabel: 'ALARM STATE // CRITICAL VECTOR',
+        glyph: '🚨',
+        accentColor: '#ef4444',
+        auraGradient: 'linear-gradient(90deg, #ef4444, #f97316, #dc2626)',
+      };
+    case 'tranquil':
+      return {
+        // Emerald harmonic stasis with gentle softened luminance
+        filter: isClearMode ? 'none' : 'hue-rotate(130deg) saturate(0.88) brightness(0.96) contrast(0.98)',
+        boxShadow: isClearMode
+          ? '0 0 30px rgba(16, 185, 129, 0.25), inset 0 0 15px rgba(16, 185, 129, 0.08)'
+          : '0 10px 40px rgba(0, 0, 0, 0.8), 0 0 32px rgba(16, 185, 129, 0.28), 0 0 12px rgba(5, 150, 105, 0.15)',
+        borderColor: 'rgba(16, 185, 129, 0.45)',
+        badgeLabel: 'TRANQUIL HARMONIC // STASIS BALANCED',
+        glyph: '🌿',
+        accentColor: '#10b981',
+        auraGradient: 'linear-gradient(90deg, #10b981, #06b6d4, #34d399)',
+      };
+    case 'cosmic':
+      return {
+        // Deep relativistic ultraviolet void with rich cosmic purple halo
+        filter: isClearMode ? 'none' : 'hue-rotate(265deg) saturate(1.40) brightness(1.04) contrast(1.06)',
+        boxShadow: isClearMode
+          ? '0 0 35px rgba(168, 85, 247, 0.35), inset 0 0 20px rgba(168, 85, 247, 0.1)'
+          : '0 10px 45px rgba(0, 0, 0, 0.8), 0 0 44px rgba(168, 85, 247, 0.42), 0 0 20px rgba(59, 130, 246, 0.22)',
+        borderColor: 'rgba(168, 85, 247, 0.55)',
+        badgeLabel: 'COSMIC RELATIVITY // FRAME DRAGGING',
+        glyph: '🌌',
+        accentColor: '#a855f7',
+        auraGradient: 'linear-gradient(90deg, #a855f7, #6366f1, #c084fc)',
+      };
+    case 'chaos':
+      return {
+        // Prismatic dispersion jitter and high dynamic chromatic flare
+        filter: isClearMode ? 'none' : 'hue-rotate(185deg) saturate(1.85) brightness(1.14) contrast(1.26)',
+        boxShadow: isClearMode
+          ? '0 0 40px rgba(236, 72, 153, 0.4), inset 0 0 20px rgba(6, 182, 212, 0.2)'
+          : '0 10px 45px rgba(0, 0, 0, 0.85), 0 0 52px rgba(236, 72, 153, 0.5), inset 0 0 20px rgba(6, 182, 212, 0.2)',
+        borderColor: 'rgba(236, 72, 153, 0.65)',
+        badgeLabel: 'PRISMATIC CHAOS // ENTROPY FLUX',
+        glyph: '🌀',
+        accentColor: '#ec4899',
+        auraGradient: 'linear-gradient(90deg, #ec4899, #06b6d4, #eab308)',
+      };
+    case 'analytical':
+    default:
+      return {
+        // Crystalline cyber cyan and balanced geometric precision
+        filter: isClearMode ? 'none' : 'hue-rotate(0deg) saturate(1.05) brightness(1.0) contrast(1.02)',
+        boxShadow: isClearMode
+          ? '0 0 35px rgba(0, 242, 255, 0.25), inset 0 0 20px rgba(0, 242, 255, 0.08)'
+          : '0 10px 40px rgba(0, 0, 0, 0.8), 0 0 32px rgba(0, 242, 255, 0.25), 0 0 12px rgba(129, 140, 248, 0.15)',
+        borderColor: 'rgba(0, 242, 255, 0.45)',
+        badgeLabel: 'ANALYTICAL MATRIX // LOGIC CALIBRATED',
+        glyph: '⚡',
+        accentColor: '#00f2ff',
+        auraGradient: 'linear-gradient(90deg, #00f2ff, #818cf8, #38bdf8)',
+      };
+  }
+}
 
 export const HyperTerminal: React.FC<HyperTerminalProps> = ({ envState, setEnvState }) => {
   // Terminal Instances (tabs)
@@ -89,9 +220,10 @@ export const HyperTerminal: React.FC<HyperTerminalProps> = ({ envState, setEnvSt
         {
           id: 'init-1',
           type: 'system',
-          text: `⚡ HYPERTERMINAL POLYGLOT QUINE OS // POLYMORPHIC NEURAL SUBSTRATE
-100% Visual Renderer Active   Live AI Voice Response   Real-Time Border Waveform
-Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mode>' to switch 3D geometry.`,
+          text: `⚡ GEMINI INTERACTIVE DUPLEX OS // ACTIVE LISTENING ENGAGED
+Female Neural Voice: 528Hz Solfeggio Carrier   Continuous Mic Duplex: ACTIVE
+Direct voice and typing naturally route to Gemini — no "gemini" wake word needed.
+Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
           timestamp: new Date().toLocaleTimeString(),
         },
       ],
@@ -107,6 +239,8 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPureCanvas, setIsPureCanvas] = useState(false);
   const [isMicListening, setIsMicListening] = useState(false);
+  const [wakeState, setWakeState] = useState<WakeWordState>(audioVoiceService.getWakeWordState());
+  const [isWakeGated, setIsWakeGated] = useState<boolean>(audioVoiceService.isWakeWordEnabled());
 
   // Autocomplete dropdown state
   const [suggestions, setSuggestions] = useState<CommandSuggestion[]>([]);
@@ -122,6 +256,7 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   const [linksInitialUrl, setLinksInitialUrl] = useState('file:///root/gemini.md');
   const [isEngramsModalOpen, setIsEngramsModalOpen] = useState(false);
   const [isColorProfileModalOpen, setIsColorProfileModalOpen] = useState(false);
+  const [isNetSecDashboardOpen, setIsNetSecDashboardOpen] = useState(false);
   const [engramsMarkdown, setEngramsMarkdown] = useState<string>(MASTER_GEMINI_MD_DEFAULT);
   const [chromeVoxAnnounce, setChromeVoxAnnounce] = useState('');
   const [commandHistoryItems, setCommandHistoryItems] = useState<CommandHistoryItem[]>([
@@ -198,14 +333,60 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     return unsub;
   }, []);
 
-  // Sync speech-to-command microphone transcripts
+  // Listen for wake-word state changes (passive vs active)
+  useEffect(() => {
+    const unsub = audioVoiceService.onWakeWordChange((state) => {
+      setWakeState(state);
+      setIsWakeGated(audioVoiceService.isWakeWordEnabled());
+    });
+    return unsub;
+  }, []);
+
+  // Sync speech-to-command microphone transcripts with lightweight wake-word gating
   useEffect(() => {
     const unsub = audioVoiceService.onTranscript((transcript, isFinal) => {
-      if (transcript) {
-        setInputVal(transcript);
-        if (isFinal) {
-          appendLine(`[Spoken Voice Command]: "${transcript}"`, 'speech', '🎙️');
-          handleCommandSubmit(undefined, transcript);
+      if (!transcript) return;
+
+      const wakeEnabled = audioVoiceService.isWakeWordEnabled();
+      const currentWakeState = audioVoiceService.getWakeWordState();
+      const parsed = parseWakeWord(transcript);
+
+      if (wakeEnabled && currentWakeState === 'passive') {
+        // PASSIVE LISTENING: remains quiet until addressed by wake word ('Gemini' or 'Terminal')
+        if (parsed.hasWakeWord) {
+          const wakeWordName = (parsed.wakeWord || 'Gemini').toUpperCase();
+          audioVoiceService.activateWakeState(parsed.wakeWord);
+          audioVoiceService.playTone(1056, 'sine', 100);
+
+          if (parsed.isStandaloneWake) {
+            // User addressed the AI with standalone wake word: "Gemini" / "Terminal"
+            appendLine(`[⚡ Wake Word Triggered: ${wakeWordName}]: Active speech state engaged. Listening...`, 'speech', '⚡');
+            audioVoiceService.speak('Yes? I am listening.');
+            setInputVal('');
+          } else if (isFinal) {
+            // User addressed with full directive: "Gemini, <directive>"
+            appendLine(`[⚡ Wake Word Triggered: ${wakeWordName}]: "${parsed.remainder}"`, 'speech', '⚡');
+            setInputVal(parsed.remainder);
+            handleCommandSubmit(undefined, parsed.remainder);
+          } else {
+            // Interim speech while addressing
+            setInputVal(parsed.remainder);
+          }
+        } else {
+          // Passive state: silently ignore ambient background chatter without executing
+        }
+      } else {
+        // ACTIVE SPEECH STATE (or wake-word gating disabled)
+        if (wakeEnabled) {
+          audioVoiceService.touchWakeActivity();
+        }
+
+        const cleanTranscript = parsed.hasWakeWord ? (parsed.remainder || parsed.wakeWord || transcript) : transcript;
+        setInputVal(cleanTranscript);
+
+        if (isFinal && cleanTranscript.trim()) {
+          appendLine(`[Active Voice Directive]: "${cleanTranscript.trim()}"`, 'speech', '🎙️');
+          handleCommandSubmit(undefined, cleanTranscript.trim());
         }
       }
     });
@@ -249,6 +430,31 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   useEffect(() => {
     ambientAudioService.updateSentiment(envState.sentiment);
   }, [envState.sentiment]);
+
+  // Auto-start Gemini Interactive listening on session load (always-listening duplex)
+  useEffect(() => {
+    let mounted = true;
+    const startInteractiveListening = async () => {
+      try {
+        const ok = await audioVoiceService.startMicrophone();
+        if (mounted && ok) {
+          setIsMicListening(true);
+          audioVoiceService.playEarcon('stream');
+          setTimeout(() => {
+            if (mounted) {
+              audioVoiceService.speak('Gemini Interactive online. I am listening.');
+            }
+          }, 850);
+        }
+      } catch {
+        // Handled gracefully in audioVoiceService
+      }
+    };
+    startInteractiveListening();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Toggle microphone input handler
   const handleToggleMic = async () => {
@@ -311,6 +517,75 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     }
   };
 
+  const executePipelineCommand = async (commandLine: string) => {
+    const stages = pipelineEngine.splitPipeline(commandLine);
+    if (stages.length === 0) return;
+
+    let currentStream = '';
+    const firstStage = stages[0].trim();
+    const firstParts = firstStage.split(/\s+/);
+    const firstCmd = firstParts[0].toLowerCase();
+    const firstArgs = firstParts.slice(1);
+
+    // Initial stage stream generator
+    if (firstCmd === 'cat') {
+      const targetPath = firstArgs[0] || '';
+      try {
+        currentStream = vfs.readFile(activeInstance.cwd, targetPath);
+      } catch (e: any) {
+        appendLine(`cat: ${e.message}`, 'error');
+        return;
+      }
+    } else if (firstCmd === 'ls') {
+      try {
+        const files = vfs.listDir(activeInstance.cwd, firstArgs[0] || '.');
+        currentStream = files.map((f) => `${f.isDir ? '[DIR] ' : ''}${f.name}`).join('\n');
+      } catch (e: any) {
+        appendLine(`ls: ${e.message}`, 'error');
+        return;
+      }
+    } else if (firstCmd === 'history') {
+      currentStream = activeInstance.history.join('\n');
+    } else if (firstCmd === 'echo') {
+      currentStream = firstArgs.join(' ').replace(/^["']|["']$/g, '');
+    } else if (firstCmd === 'bun') {
+      currentStream = pipelineEngine.executeBun(firstArgs);
+    } else if (firstCmd === 'uv') {
+      currentStream = pipelineEngine.executeUv(firstArgs);
+    } else if (firstCmd === 'pip') {
+      currentStream = pipelineEngine.executePip(firstArgs);
+    } else if (firstCmd === 'netsec' || firstCmd === 'kali') {
+      const rep = netSecService.runDefensiveAudit();
+      currentStream = JSON.stringify(rep, null, 2);
+    } else if (firstCmd === 'sparsebundle' || firstCmd === 'sparse') {
+      if (firstArgs[0] === 'cat') {
+        try {
+          currentStream = sparsebundleService.readFile(firstArgs[1] || 'StateVault.sparsebundle', firstArgs[2] || '');
+        } catch (e: any) {
+          appendLine(`sparsebundle cat: ${e.message}`, 'error');
+          return;
+        }
+      } else {
+        currentStream = `[Sparsebundle Vault: StateVault.sparsebundle active]`;
+      }
+    } else {
+      currentStream = firstStage;
+    }
+
+    // Pass stream sequentially through remaining pipeline stages
+    for (let i = 1; i < stages.length; i++) {
+      const stage = stages[i];
+      const res = pipelineEngine.executeFilter(stage, currentStream);
+      if (res.isError) {
+        appendLine(res.output, 'error');
+        return;
+      }
+      currentStream = res.output;
+    }
+
+    appendLine(currentStream, 'output');
+  };
+
   const executeCommand = async (raw: string) => {
     if (!raw) return;
 
@@ -345,7 +620,11 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
     const startTime = performance.now();
     let status: 'success' | 'error' = 'success';
     try {
-      await processCommand(raw);
+      if (pipelineEngine.hasPipe(raw)) {
+        await executePipelineCommand(raw);
+      } else {
+        await processCommand(raw);
+      }
     } catch {
       status = 'error';
     } finally {
@@ -357,7 +636,15 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
       else if (['gemini', 'ai', 'ask', 'voice', 'speak', 'mic', 'listen', '963'].includes(cmdName)) category = 'AI';
       else if (['ls', 'cd', 'pwd', 'cat', 'touch', 'mkdir', 'rm', 'edit', 'nano', 'tree', 'find', 'grep', 'vfs'].includes(cmdName)) category = 'VFS';
       else if (['d3', 'ping', 'netstat', 'curl', 'fetch', 'satcom', 'swarm', 'stream'].includes(cmdName)) category = 'NET';
-      else if (['node', 'js', 'git', 'macro'].includes(cmdName)) category = 'DEV';
+      else if (['node', 'js', 'git', 'macro', 'bun', 'uv', 'pip'].includes(cmdName)) category = 'DEV';
+
+      // Auto-save per-iteration state delta into virtual sparsebundle & prime-compress
+      try {
+        const lastOutputLine = activeInstance.lines[activeInstance.lines.length - 1]?.text || 'ok';
+        iterationStateService.recordIteration(raw, lastOutputLine, envState, activeInstance.cwd);
+      } catch (err) {
+        console.warn('Iteration state record warning:', err);
+      }
 
       setCommandHistoryItems((prev) => [
         ...prev,
@@ -375,6 +662,112 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
       if (envState.chromeVoxEnabled) {
         audioVoiceService.announce(`Command ${raw} finished with status ${status}.`);
       }
+    }
+  };
+
+  // Gemini Interactive Duplex Handler (natural conversation without requiring "gemini" prefix)
+  const callGeminiChat = async (promptText: string) => {
+    const trimmed = promptText.trim();
+    if (!trimmed) return;
+
+    setIsProcessing(true);
+    appendLine(`Querying Gemini Interactive Core: "${trimmed}"...`, 'ai', '✨');
+
+    try {
+      const resp = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: trimmed,
+          conversationHistory: activeInstance.lines
+            .filter((l) => l.type === 'input' || l.type === 'ai')
+            .map((l) => ({ role: l.type === 'input' ? 'user' : 'model', text: l.text })),
+          currentEnv: {
+            topology: envState.topology,
+            sentiment: envState.sentiment,
+          },
+          engramsContext: engramsMarkdown,
+        }),
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Server returned HTTP ${resp.status}`);
+      }
+
+      const data = await resp.json();
+
+      // Modulate background 3D visual and D3 Stream based on AI response!
+      let d3Update: Partial<EnvironmentState['d3Stream']> = {};
+      if (data.d3Stream) {
+        d3Update = { ...data.d3Stream, active: true };
+      } else if (/network|packet|stream|telemetry|d3|node|graph|traffic|throughput|satcom|ping|cluster|socket/i.test(trimmed)) {
+        const chosenShape: D3StreamShape = /radar|scan|orbital/i.test(trimmed)
+          ? 'radar'
+          : /stream|wave|bandwidth/i.test(trimmed)
+          ? 'streamgraph'
+          : /chord|satellite|ring/i.test(trimmed)
+          ? 'chord'
+          : 'force';
+        d3Update = {
+          active: true,
+          shape: chosenShape,
+          title: `Gemini ${chosenShape.toUpperCase()} Telemetry`,
+          lastCommand: `gemini: ${trimmed.slice(0, 18)}`,
+          geminiTelemetrySummary: data.speechText || `Gemini Telemetry Stream: ${trimmed}`,
+          packetRate: Math.floor(Math.random() * 800 + 1600),
+          throughputMbps: +(Math.random() * 300 + 850).toFixed(1),
+        };
+        audioVoiceService.playEarcon('stream');
+      }
+
+      setEnvState((prev) => ({
+        ...prev,
+        topology: (data.topology as TopologyType) || prev.topology,
+        sentiment: (data.sentiment as SentimentType) || prev.sentiment,
+        primaryColor: data.primaryColor || prev.primaryColor,
+        secondaryColor: data.secondaryColor || prev.secondaryColor,
+        speed: data.speed !== undefined ? data.speed : prev.speed,
+        gravity: data.gravity !== undefined ? data.gravity : prev.gravity,
+        turbulence: data.turbulence !== undefined ? data.turbulence : prev.turbulence,
+        floatingGlyph: data.floatingGlyph || '✨',
+        d3Stream: {
+          ...prev.d3Stream,
+          ...d3Update,
+          geminiTelemetrySummary: data.speechText || data.reply?.slice(0, 120) || prev.d3Stream.geminiTelemetrySummary,
+        },
+      }));
+
+      // Render formatted response in terminal
+      appendLine(data.reply || 'Response received.', 'ai', data.floatingGlyph || '✨');
+
+      // Trigger AI voice response & project floating speech into 3D visual using female voice profile
+      if (data.speechText && envState.voiceActive) {
+        appendLine(`[AI Voice Projected into Visual]: "${data.speechText}"`, 'speech');
+        audioVoiceService.speak(data.speechText);
+      }
+    } catch (err: any) {
+      appendLine(`Gemini Interactive Note: ${err.message}. Synthesizing deterministic neural response.`, 'warn');
+      const chosenShape: D3StreamShape = /radar|scan/i.test(trimmed) ? 'radar' : /stream|wave/i.test(trimmed) ? 'streamgraph' : 'force';
+      setEnvState((prev) => ({
+        ...prev,
+        sentiment: 'creative',
+        primaryColor: '#c084fc',
+        secondaryColor: '#00f2ff',
+        speed: 1.1,
+        d3Stream: {
+          ...prev.d3Stream,
+          active: true,
+          shape: chosenShape,
+          geminiTelemetrySummary: `Neural Stream: Query "${trimmed.slice(0, 32)}" synthesized into D3 ${chosenShape}.`,
+        },
+      }));
+      const fallbackSpeech = `Analyzed your query: ${trimmed.slice(0, 30)}. Background visual modulated.`;
+      appendLine(`[Gemini Neural]: ${fallbackSpeech}`, 'ai', '✨');
+      if (envState.voiceActive) {
+        audioVoiceService.speak(fallbackSpeech);
+      }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -467,6 +860,23 @@ Type 'help' to inspect all commands, 'mic on' to speak commands, or 'render <mod
   mount | umount <dev>   : Plug-n-play operating system volume manager
   engram | gdrive        : Google Drive & gemini.md memory engrams hub
   geosync [on|off]       : Sync terminal with physical node & Earth descent
+
+[DEFENSIVE NETWORK SECURITY, OPENWRT GATEWAY & SSH]
+  gateway / openwrt      : OpenWrt 23.05.3 router state, interfaces & uptime
+  openwrt firewall       : Inspect UCI firewall zones & drop policies
+  openwrt dhcp           : List active DHCP client leases & MAC addresses
+  openwrt wireless       : Wi-Fi 6 (802.11ax) WPA3-SAE & PMF status
+  openwrt isolate <ip>   : Quarantine rogue host to isolated VLAN DROP policy
+  openwrt release <ip>   : Release device quarantine & restore LAN access
+  ssh status | list      : Inspect active persistent SSH sessions & keepalives
+  ssh connect <target>   : Establish persistent encrypted SSH connection (Ed25519)
+  ssh exec <id> <cmd>    : Execute remote command on gateway or Kali node
+  ssh keygen             : Generate sovereign Ed25519 SSH identity keypair
+  netsec audit           : Full defensive kernel sysctl & network hardening audit
+  netsec scan            : Inspect local subnet hosts for security anomalies
+  netsec tools           : Kali Linux defensive toolchain (Suricata, Wireshark, Lynis)
+  netsec harden          : Enforce kernel sysctls (tcp_syncookies, rp_filter)
+  apikey status          : Resilient API key pool health & failover telemetry
 
 [TERMINAL CONTROLS]
   history [-e]           : Open history browser or export to VFS (Ctrl+R)
@@ -882,105 +1292,7 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
           appendLine('Usage: gemini <your message or query>', 'error');
           break;
         }
-        setIsProcessing(true);
-        appendLine(`Querying Polymorphic Neural Core: "${argStr}"...`, 'ai');
-
-        try {
-          const resp = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: argStr,
-              conversationHistory: activeInstance.lines
-                .filter((l) => l.type === 'input' || l.type === 'ai')
-                .map((l) => ({ role: l.type === 'input' ? 'user' : 'model', text: l.text })),
-              currentEnv: {
-                topology: envState.topology,
-                sentiment: envState.sentiment,
-              },
-              engramsContext: engramsMarkdown,
-            }),
-          });
-
-          if (!resp.ok) {
-            throw new Error(`Server returned HTTP ${resp.status}`);
-          }
-
-          const data = await resp.json();
-
-          // Modulate background 3D visual and D3 Stream based on AI response!
-          let d3Update: Partial<EnvironmentState['d3Stream']> = {};
-          if (data.d3Stream) {
-            d3Update = { ...data.d3Stream, active: true };
-          } else if (/network|packet|stream|telemetry|d3|node|graph|traffic|throughput|satcom|ping|cluster|socket/i.test(argStr)) {
-            const chosenShape: D3StreamShape = /radar|scan|orbital/i.test(argStr)
-              ? 'radar'
-              : /stream|wave|bandwidth/i.test(argStr)
-              ? 'streamgraph'
-              : /chord|satellite|ring/i.test(argStr)
-              ? 'chord'
-              : 'force';
-            d3Update = {
-              active: true,
-              shape: chosenShape,
-              title: `Gemini ${chosenShape.toUpperCase()} Telemetry`,
-              lastCommand: `gemini: ${argStr.slice(0, 18)}`,
-              geminiTelemetrySummary: data.speechText || `Gemini Telemetry Stream: ${argStr}`,
-              packetRate: Math.floor(Math.random() * 800 + 1600),
-              throughputMbps: +(Math.random() * 300 + 850).toFixed(1),
-            };
-            audioVoiceService.playEarcon('stream');
-          }
-
-          setEnvState((prev) => ({
-            ...prev,
-            topology: (data.topology as TopologyType) || prev.topology,
-            sentiment: (data.sentiment as SentimentType) || prev.sentiment,
-            primaryColor: data.primaryColor || prev.primaryColor,
-            secondaryColor: data.secondaryColor || prev.secondaryColor,
-            speed: data.speed !== undefined ? data.speed : prev.speed,
-            gravity: data.gravity !== undefined ? data.gravity : prev.gravity,
-            turbulence: data.turbulence !== undefined ? data.turbulence : prev.turbulence,
-            floatingGlyph: data.floatingGlyph || '⨋',
-            d3Stream: {
-              ...prev.d3Stream,
-              ...d3Update,
-              geminiTelemetrySummary: data.speechText || data.reply?.slice(0, 120) || prev.d3Stream.geminiTelemetrySummary,
-            },
-          }));
-
-          // Render formatted response in terminal
-          appendLine(data.reply || 'Response received.', 'ai', data.floatingGlyph || '⨋');
-
-          // Trigger AI voice response & project floating speech into 3D visual!
-          if (data.speechText && envState.voiceActive) {
-            appendLine(`[AI Voice Projected into Visual]: "${data.speechText}"`, 'speech');
-            audioVoiceService.speak(data.speechText);
-          }
-        } catch (err: any) {
-          appendLine(`AI Query Note: ${err.message}. Using deterministic local engine.`, 'warn');
-          const chosenShape: D3StreamShape = /radar|scan/i.test(argStr) ? 'radar' : /stream|wave/i.test(argStr) ? 'streamgraph' : 'force';
-          setEnvState((prev) => ({
-            ...prev,
-            sentiment: 'analytical',
-            primaryColor: '#00f2ff',
-            secondaryColor: '#a855f7',
-            speed: 1.2,
-            d3Stream: {
-              ...prev.d3Stream,
-              active: true,
-              shape: chosenShape,
-              geminiTelemetrySummary: `Neural Stream: Query "${argStr.slice(0, 32)}" synthesized to D3 ${chosenShape}.`,
-            },
-          }));
-          const fallbackSpeech = `Analyzed your query: ${argStr.slice(0, 30)}. Background visual modulated.`;
-          appendLine(`[Neural Core]: ${fallbackSpeech}`, 'ai', '⨋');
-          if (envState.voiceActive) {
-            audioVoiceService.speak(fallbackSpeech);
-          }
-        } finally {
-          setIsProcessing(false);
-        }
+        await callGeminiChat(argStr);
         break;
       }
 
@@ -1078,6 +1390,51 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
               : 'Microphone audio input disabled.',
             next ? 'success' : 'system',
             next ? '🎙️' : undefined
+          );
+        }
+        break;
+      }
+
+      case 'wakeword': {
+        const sub = (args[0] || '').toLowerCase();
+        if (sub === 'on') {
+          audioVoiceService.setWakeWordEnabled(true);
+          setIsWakeGated(true);
+          appendLine('Wake-word gating ENGAGED. Terminal remains passively listening until addressed with "Gemini" or "Terminal".', 'success', '⚡');
+          audioVoiceService.playTone(880, 'sine', 80);
+        } else if (sub === 'off') {
+          audioVoiceService.setWakeWordEnabled(false);
+          setIsWakeGated(false);
+          appendLine('Wake-word gating DISABLED. Microphone is in continuous direct attentive mode (no wake word needed).', 'warn', '🎙️');
+          audioVoiceService.playTone(440, 'triangle', 80);
+        } else if (sub === 'test' || sub === 'wake' || sub === 'trigger') {
+          const word = args[1] || 'gemini';
+          audioVoiceService.activateWakeState(word);
+          appendLine(`Simulated wake word trigger: [${word.toUpperCase()}]. Active speech state engaged.`, 'success', '⚡');
+          audioVoiceService.speak('Yes? I am listening.');
+        } else if (sub === 'timeout') {
+          const sec = parseInt(args[1] || '12', 10);
+          if (isNaN(sec) || sec < 3 || sec > 120) {
+            appendLine('Usage: wakeword timeout <seconds (3-120)>', 'error');
+          } else {
+            audioVoiceService.setWakeWordTimeout(sec);
+            appendLine(`Active speech state dwell timeout set to ${sec} seconds.`, 'success', '⏱️');
+          }
+        } else {
+          const enabled = audioVoiceService.isWakeWordEnabled();
+          const state = audioVoiceService.getWakeWordState();
+          const timeout = audioVoiceService.getWakeWordTimeout();
+          appendLine(
+            `========================================================================
+⚡ LIGHTWEIGHT WAKE-WORD LISTENER TELEMETRY
+========================================================================
+Gating Mode     : ${enabled ? 'PASSIVE STANDBY (Gated until addressed)' : 'CONTINUOUS ATTENTIVE (Always open)'}
+Current State   : ${state.toUpperCase()} ${state === 'passive' ? '[Passively listening for "Gemini" or "Terminal"]' : '[Active Speech Window Engaged]'}
+Active Dwell    : ${timeout} seconds before returning to passive stasis
+Wake Words      : "Gemini", "Hey Gemini", "Terminal", "Nexus", "Computer", "Nova"
+Commands        : wakeword on | off | test | timeout <sec>`,
+            'table',
+            '⚡'
           );
         }
         break;
@@ -2281,6 +2638,396 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
         break;
       }
 
+      // ==========================================
+      // OPENWRT GATEWAY & ROUTER ADMINISTRATION
+      // ==========================================
+      case 'gateway':
+      case 'openwrt': {
+        const sub = (args[0] || 'status').toLowerCase();
+        if (sub === 'status' || sub === 'info') {
+          const gw = netSecService.getGatewayStatus();
+          audioVoiceService.playEarcon('success');
+          appendLine(`[OPENWRT GATEWAY SUB-SYSTEM // 192.168.1.1]
+Model        : ${gw.model}
+Kernel       : ${gw.kernel}
+Gateway IP   : ${gw.gatewayIp}
+Uptime       : ${gw.uptime}
+Load Average : ${gw.cpuLoad}
+Memory       : ${gw.memory.totalMb - gw.memory.freeMb}MB / ${gw.memory.totalMb}MB (${gw.memory.freeMb}MB free)
+Active Leases: ${gw.dhcpClients.length} connected (${gw.quarantinedCount} quarantined)
+
+INTERFACES:
+${gw.interfaces.map((iface) => `  • ${iface.name.padEnd(10)} [${iface.status}] ${iface.ip || iface.band || ''} (${iface.type || iface.enc || ''})`).join('\n')}`, 'table', '🌐');
+        } else if (sub === 'firewall' || sub === 'fw') {
+          const gw = netSecService.getGatewayStatus();
+          appendLine(`[OPENWRT UCI FIREWALL CONFIGURATION]
+Zone lan -> wan : ACCEPT (Forwarding enabled)
+Zone wan -> lan : DROP / REJECT (Zero exposed admin ports)
+SYN Flood Prot  : ENABLED (50/sec threshold)
+
+ACTIVE FIREWALL RULES:
+${gw.firewallRules.map((r) => `  • [${r.target}] ${r.name.padEnd(24)} proto:${r.proto || 'all'} ${r.destPort ? `port:${r.destPort}` : ''} src:${r.src || 'any'}`).join('\n')}
+
+QUARANTINE RULES:
+${gw.quarantinedCount > 0 ? Array.from(gw.dhcpClients.filter(c => c.isQuarantined)).map(c => `  • [DROP] QUARANTINED: ${c.ip} (${c.hostname}) [MAC: ${c.mac}]`).join('\n') : '  • No quarantined hosts (All LAN nodes verified).'}`, 'table', '🛡️');
+        } else if (sub === 'dhcp' || sub === 'clients' || sub === 'leases') {
+          const gw = netSecService.getGatewayStatus();
+          appendLine(`[OPENWRT DHCP CLIENT LEASES TABLE]
+${'IP ADDRESS'.padEnd(16)} ${'MAC ADDRESS'.padEnd(19)} ${'HOSTNAME'.padEnd(24)} ${'EXPIRES'.padEnd(10)} STATUS
+${'─'.repeat(78)}
+${gw.dhcpClients.map((c) => `${c.ip.padEnd(16)} ${c.mac.padEnd(19)} ${c.hostname.padEnd(24)} ${c.leaseExpires.padEnd(10)} ${c.isQuarantined ? '🔴 QUARANTINED' : '🟢 ACTIVE'}`).join('\n')}`, 'table', '📡');
+        } else if (sub === 'wireless' || sub === 'wifi') {
+          appendLine(`[OPENWRT WIRELESS SECURITY CONFIGURATION]
+Device radio0: 5.0 GHz (802.11ax / Wi-Fi 6 HE80)
+  • SSID        : HyperTerminal-SecNet
+  • Encryption  : WPA3-SAE (Simultaneous Authentication of Equals)
+  • PMF (802.11w): REQUIRED (Protected Management Frames mandatory)
+  • Mode        : Master Access Point (AP)
+
+Device radio1: 2.4 GHz (802.11n / IoT Isolated)
+  • SSID        : Nexus_2G_IoT_Isolated
+  • Encryption  : WPA2-PSK (VLAN 40 Isolated from Primary Core)
+  • Client Isolate: ENABLED (No peer-to-peer lateral movement)`, 'table', '📶');
+        } else if (sub === 'isolate' || sub === 'quarantine') {
+          const targetIp = args[1];
+          if (!targetIp) {
+            appendLine('Usage: openwrt isolate <IP_ADDRESS> (e.g. openwrt isolate 192.168.1.105)', 'error');
+            break;
+          }
+          const ok = netSecService.quarantineDevice(targetIp);
+          if (ok) {
+            audioVoiceService.playTone(330, 'sawtooth', 200);
+            appendLine(`[ALERT] Node '${targetIp}' has been placed in DEFENSIVE QUARANTINE.
+Gateway firewall has injected: config rule [src_ip='${targetIp}', target='DROP'].
+All WAN/LAN forwarding from this IP is now severed.`, 'good', '🛑');
+          } else {
+            appendLine(`Failed to quarantine '${targetIp}'. IP must be on the 192.168.1.0/24 subnet.`, 'error');
+          }
+        } else if (sub === 'release') {
+          const targetIp = args[1];
+          if (!targetIp) {
+            appendLine('Usage: openwrt release <IP_ADDRESS>', 'error');
+            break;
+          }
+          const ok = netSecService.releaseDevice(targetIp);
+          if (ok) {
+            audioVoiceService.playTone(880, 'sine', 150);
+            appendLine(`[RESTORED] Node '${targetIp}' released from quarantine. Normal LAN access restored.`, 'success', '✅');
+          } else {
+            appendLine(`Node '${targetIp}' was not in quarantine.`, 'error');
+          }
+        } else {
+          appendLine(`Usage: openwrt <status | firewall | dhcp | wireless | isolate <ip> | release <ip>>`, 'error');
+        }
+        break;
+      }
+
+      // ==========================================
+      // PERSISTENT SSH SESSION MANAGEMENT & REMOTE EXEC
+      // ==========================================
+      case 'ssh': {
+        const sub = (args[0] || 'status').toLowerCase();
+        if (sub === 'status' || sub === 'list') {
+          const sessions = sshService.getSessions();
+          audioVoiceService.playEarcon('switch');
+          appendLine(`[ACTIVE PERSISTENT SSH SESSIONS]
+${'SESSION ID'.padEnd(26)} ${'TARGET HOST'.padEnd(26)} ${'CIPHER SUITE'.padEnd(28)} LATENCY  STATUS
+${'─'.repeat(95)}
+${sessions.map((s) => `${s.id.padEnd(26)} ${s.target.padEnd(26)} ${s.cipherSuite.slice(0, 26).padEnd(28)} ${s.latencyMs.toFixed(1)}ms   🟢 ${s.status}`).join('\n')}
+
+Persistent keepalive heartbeats active every 15s.`, 'table', '🔒');
+        } else if (sub === 'connect') {
+          const target = args[1];
+          if (!target) {
+            appendLine('Usage: ssh connect <user@host[:port]> (e.g. ssh connect root@192.168.1.1:22)', 'error');
+            break;
+          }
+          const session = sshService.createSession(target);
+          audioVoiceService.playEarcon('success');
+          appendLine(`[SSH HANDSHAKE SUCCESSFUL]
+Connected to: ${session.target}
+Session ID  : ${session.id}
+Key Exchange: ${session.kexAlgorithm}
+Cipher Suite: ${session.cipherSuite}
+Identity    : ~/.ssh/${session.identityKey}
+Heartbeat   : 15s interval (Keepalive active)`, 'success', '🔑');
+        } else if (sub === 'disconnect' || sub === 'close') {
+          const target = args[1];
+          if (!target) {
+            appendLine('Usage: ssh disconnect <session_id | host>', 'error');
+            break;
+          }
+          const ok = sshService.disconnect(target);
+          if (ok) {
+            appendLine(`SSH session '${target}' closed cleanly.`, 'system');
+          } else {
+            appendLine(`SSH session '${target}' not found. Run 'ssh status' to list active sessions.`, 'error');
+          }
+        } else if (sub === 'exec' || sub === 'run') {
+          const sessionId = args[1];
+          const remoteCmd = args.slice(2).join(' ');
+          if (!sessionId || !remoteCmd) {
+            appendLine('Usage: ssh exec <sessionId | host> <remote_command>\nExample: ssh exec root@192.168.1.1 uci show firewall', 'error');
+            break;
+          }
+          const result = sshService.executeRemoteCommand(sessionId, remoteCmd);
+          if (result.exitCode === 0) {
+            appendLine(`[SSH: ${sessionId} // Command: "${result.command}" // ${result.durationMs}ms]
+${result.stdout}`, 'output');
+          } else {
+            appendLine(`[SSH: ${sessionId} ERROR // Exit Code ${result.exitCode} // ${result.durationMs}ms]
+${result.stderr}`, 'error');
+          }
+        } else if (sub === 'keygen') {
+          const pubKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIInq58W2P7f7Q6M3S9V8K1X0L5Z4D2G8J7F9 sovereign@hyperterminal';
+          appendLine(`[SOVEREIGN ED25519 SSH KEYPAIR GENERATED]
+Private key saved to : /root/.ssh/id_ed25519
+Public key saved to  : /root/.ssh/id_ed25519.pub
+Fingerprint          : SHA256:7uK2xL8mP0w9vR4tY1qZ6sA3dF5gH7jK2 sovereign@hyperterminal
+Public Key:
+${pubKey}`, 'success', '🗝️');
+        } else {
+          // If called as `ssh root@192.168.1.1` or `ssh kali@192.168.1.150`
+          const target = args[0];
+          if (target.includes('@') || target.includes('.')) {
+            const session = sshService.createSession(target);
+            audioVoiceService.playEarcon('success');
+            appendLine(`Established SSH session '${session.id}' to ${session.target}. Use 'ssh exec ${session.id} <command>' to run remote instructions.`, 'success', '🔒');
+          } else {
+            appendLine('Usage: ssh <status | connect <user@host> | exec <id> <command> | disconnect <id> | keygen>', 'error');
+          }
+        }
+        break;
+      }
+
+      // ==========================================
+      // DEFENSIVE NETWORK SECURITY AUDITING & KALI WORKLOADS
+      // ==========================================
+      case 'netsec':
+      case 'kali': {
+        const sub = (args[0] || 'audit').toLowerCase();
+        if (sub === 'dashboard' || sub === 'gui' || sub === 'panel' || sub === 'hud') {
+          setIsNetSecDashboardOpen(true);
+          audioVoiceService.playEarcon('success');
+          appendLine('Opened Kali Linux & OpenWrt Defensive Cyber Operations Dashboard [D3 Stream Real-Time].', 'system', '🛡️');
+          break;
+        }
+        if (sub === 'audit' || sub === 'posture') {
+          const report = netSecService.runDefensiveAudit();
+          audioVoiceService.playEarcon(report.securityScore >= 90 ? 'success' : 'ping');
+          appendLine(`[DEFENSIVE NETWORK SECURITY & KERNEL POSTURE AUDIT]
+Audit Timestamp : ${report.timestamp}
+Target Gateway  : ${report.gatewayIp} (OpenWrt Hardened)
+Security Score  : ${report.securityScore} / 100 [MAXIMUM DEFENSE POSTURE]
+Quarantined IPs : ${report.quarantinedIps.length > 0 ? report.quarantinedIps.join(', ') : 'None (Zero active threats)'}
+
+AUDIT CHECKS:
+${report.checks.map((c) => `  [${c.status === 'PASS' ? ' PASS ' : ' WARN '}] ${c.category.padEnd(9)} : ${c.title}\n           Value: ${c.value}`).join('\n')}`, 'table', '🛡️');
+        } else if (sub === 'tools' || sub === 'toolchain') {
+          const tools = netSecService.getKaliToolchain();
+          appendLine(`[KALI LINUX WORKLOAD DEFENSIVE TOOLCHAIN]
+${tools.map((t) => `  • [${t.status}] ${t.name.padEnd(22)} (${t.category})\n    ${t.description}`).join('\n')}`, 'table', '🐉');
+        } else if (sub === 'scan') {
+          appendLine(`[LOCAL NETWORK SUBNET SCAN // 192.168.1.0/24]
+Discovered 4 active defensive nodes:
+  • 192.168.1.1   : OpenWrt 23.05.3 Router (SSH:22 [Pubkey Only], DNS:53 [DoT], HTTPS:443 [LAN only])
+  • 192.168.1.100 : MacBook_Mirror_Core (Port 8080 WebSocket Sync OK)
+  • 192.168.1.105 : Lenovo_Chromebook_Node (LAN client, normal traffic pattern)
+  • 192.168.1.150 : Kali_Security_Node (Suricata IDS active, zero rogue broadcast bursts)
+
+All ARP entries matched static cryptographic leases. Zero unauthorized DHCP rogues detected.`, 'system', '🔍');
+        } else if (sub === 'harden') {
+          appendLine(`[APPLYING DEFENSIVE KERNEL HARDENING PARAMETERS]
+  sysctl -w net.ipv4.tcp_syncookies=1             -> OK (Mitigates SYN-flood exhaustion)
+  sysctl -w net.ipv4.conf.all.rp_filter=1         -> OK (Strict reverse path source validation)
+  sysctl -w net.ipv4.conf.all.accept_redirects=0   -> OK (Blocks malicious ICMP route modifications)
+  sysctl -w net.ipv4.conf.all.send_redirects=0     -> OK (Prevents ICMP leakage)
+  sysctl -w net.ipv4.conf.all.log_martians=1       -> OK (Logs spoofed packets)
+
+Host and Gateway defensive hardening matrix synchronized.`, 'success', '⚡');
+        } else {
+          appendLine('Usage: netsec <audit | scan | tools | harden>', 'error');
+        }
+        break;
+      }
+
+      // ==========================================
+      // RESILIENT API KEY POOL TELEMETRY
+      // ==========================================
+      case 'apikey':
+      case 'keys': {
+        const sub = (args[0] || 'status').toLowerCase();
+        if (sub === 'status' || sub === 'pool' || sub === 'health') {
+          try {
+            const res = await fetch('/api/key-status');
+            if (res.ok) {
+              const data = await res.json();
+              audioVoiceService.playEarcon('success');
+              appendLine(`[RESILIENT API KEY POOL TELEMETRY // ALWAYS-ON STATUS]
+Status            : 100% OPERATIONAL & ALWAYS-AVAILABLE
+Total Keys in Pool: ${data.poolSize}
+Active Key ID     : ${data.activeKeyId}
+Fallback Rotation : ${data.isOptimizedFallbackEnabled ? 'ENGAGED (Multi-Key Dynamic Failover)' : 'ONLINE (Automated Fallback Standby)'}
+Total Rotations   : ${data.totalRotations}
+Pool Health       : HEALTHY (Zero Quota Downtime Protocol)
+
+KEY METRICS:
+${data.keys.map((k: any) => `  • [${k.index === data.activeIndex ? 'ACTIVE' : 'STANDBY'}] Key ${k.id} (${k.source}) - Calls: ${k.totalCalls}, Failures: ${k.consecutiveFailures}${k.cooldownRemainingSec > 0 ? ` (Cooldown: ${k.cooldownRemainingSec}s)` : ' (Ready)'}`).join('\n')}
+
+*All API keys are pooled and rotated server-side in server.ts with zero client leakage.*`, 'table', '🔑');
+            } else {
+              appendLine('Failed to query API key pool telemetry from /api/key-status', 'error');
+            }
+          } catch (err: any) {
+            appendLine(`API key status query failed: ${err.message}`, 'error');
+          }
+        } else {
+          appendLine('Usage: apikey status (Inspect resilient key pool health and failover metrics)', 'error');
+        }
+        break;
+      }
+
+      case 'dashboard':
+      case 'secgui':
+      case 'security': {
+        setIsNetSecDashboardOpen(true);
+        audioVoiceService.playEarcon('success');
+        appendLine('Opened Kali Linux & OpenWrt Defensive Cyber Operations Dashboard [D3 Stream Real-Time].', 'system', '🛡️');
+        break;
+      }
+
+      // ==========================================
+      // VIRTUAL SPARSEBUNDLE DISK IMAGE ENGINE
+      // ==========================================
+      case 'sparsebundle':
+      case 'sparse': {
+        const sub = (args[0] || 'status').toLowerCase();
+        if (sub === 'status' || sub === 'list') {
+          const bundles = sparsebundleService.listBundles();
+          appendLine(`[VIRTUAL SPARSEBUNDLE DISK IMAGES]
+${'BUNDLE NAME'.padEnd(26)} ${'VIRTUAL CAPACITY'.padEnd(18)} ${'BANDS ALLOC'.padEnd(14)} SPARSITY
+${'─'.repeat(74)}
+${bundles.map(b => `${b.bundleName.padEnd(26)} ${(b.virtualCapacityBytes / (1024**3)).toFixed(0)} GB              ${String(b.allocatedBandsCount).padEnd(14)} ${(b.sparsityRatio * 100).toFixed(4)}% saved`).join('\n')}`, 'table', '💾');
+        } else if (sub === 'create') {
+          const name = args[1] || 'StateVault';
+          const sizeGB = parseInt(args[2] || '50', 10);
+          const meta = sparsebundleService.createBundle(name, sizeGB * 1024 * 1024 * 1024);
+          audioVoiceService.playEarcon('success');
+          appendLine(`Created virtual sparsebundle '${meta.bundleName}' with ${sizeGB} GB virtual capacity limit.`, 'success', '✨');
+        } else if (sub === 'mount') {
+          const name = args[1] || 'StateVault.sparsebundle';
+          const mnt = args[2] || `/mnt/sparsebundles/${name.replace('.sparsebundle', '')}`;
+          const ok = sparsebundleService.mountBundle(name, mnt);
+          if (ok) appendLine(`Mounted '${name}' at '${mnt}'.`, 'success');
+          else appendLine(`Failed to mount '${name}'.`, 'error');
+        } else if (sub === 'compact') {
+          const name = args[1] || 'StateVault.sparsebundle';
+          const res = sparsebundleService.compact(name);
+          audioVoiceService.playTone(963, 'sine', 80);
+          appendLine(`[SPARSEBUNDLE COMPACTED: ${name}]
+Reclaimed Bands : ${res.reclaimedBands}
+Reclaimed Bytes : ${res.reclaimedBytes} B
+New Size        : ${res.newAllocatedBytes} B
+Sparsity Saving : ${res.sparsitySaving} efficient`, 'success', '🧹');
+        } else if (sub === 'cat' || sub === 'read') {
+          const name = args[1] || 'StateVault.sparsebundle';
+          const file = args[2];
+          if (!file) {
+            appendLine('Usage: sparsebundle cat <bundle> <filepath>', 'error');
+            break;
+          }
+          try {
+            const content = sparsebundleService.readFile(name, file);
+            appendLine(content, 'output');
+          } catch (e: any) {
+            appendLine(e.message, 'error');
+          }
+        } else {
+          appendLine('Usage: sparsebundle <status | create <name> [sizeGB] | mount <name> <path> | compact <name> | cat <bundle> <file>>', 'error');
+        }
+        break;
+      }
+
+      // ==========================================
+      // PRIME MATHEMATICA HIGH-INTEGER COMPRESSION
+      // ==========================================
+      case 'prime': {
+        const sub = (args[0] || 'stats').toLowerCase();
+        if (sub === 'compress') {
+          const text = args.slice(1).join(' ') || activeInstance.lines[activeInstance.lines.length - 1]?.text || 'HyperTerminal';
+          const { compressed, stats } = primeCompressor.compress(text);
+          appendLine(`[PRIME MATHEMATICA COMPRESSION]
+Original Bytes   : ${stats.originalBytes} B
+Compressed Bytes : ${stats.compressedBytes} B
+Compression Ratio: ${stats.compressionRatio} (Saved ${stats.savingPercentage})
+Fermat Residue   : ${stats.fermatVerificationResidue}
+Entropy Bits/Char: ${stats.entropyBitsPerChar}
+PAYLOAD: ${compressed}`, 'table', '🔢');
+        } else if (sub === 'decompress') {
+          const token = args[1];
+          if (!token) {
+            appendLine('Usage: prime decompress <PRM:... token>', 'error');
+            break;
+          }
+          const res = primeCompressor.decompress(token);
+          appendLine(res.decompressedText, 'output');
+        } else if (sub === 'verify') {
+          const text = args.slice(1).join(' ') || 'sovereign';
+          const residue = primeCompressor.computeFermatResidue(text);
+          appendLine(`Fermat-Euler Prime Residue: ${residue} [VERIFIED]`, 'success', 'Ω');
+        } else {
+          appendLine(`[PRIME MATHEMATICA HIGH-INTEGER ENGINE]
+Canonical Prime : 137451921129154222 (18-Digit Sovereign Root)
+Mersenne Prime  : 2305843009213693951 (M61 = 2^61 - 1)
+Sophie Germain  : 982451653
+State Encoding  : Lossless modular residue polynomial entropy reduction
+Usage           : prime <compress <text> | decompress <token> | verify <text> | stats>`, 'table', '🔢');
+        }
+        break;
+      }
+
+      // ==========================================
+      // HIGH-SPEED RUNTIMES & PACKAGE MANAGERS
+      // ==========================================
+      case 'bun': {
+        appendLine(pipelineEngine.executeBun(args), 'output');
+        break;
+      }
+
+      case 'uv': {
+        appendLine(pipelineEngine.executeUv(args), 'output');
+        break;
+      }
+
+      case 'pip': {
+        appendLine(pipelineEngine.executePip(args), 'output');
+        break;
+      }
+
+      // ==========================================
+      // LIGHTWEIGHT ITERATION STATE TELEMETRY
+      // ==========================================
+      case 'state': {
+        const sub = (args[0] || 'status').toLowerCase();
+        if (sub === 'status' || sub === 'telemetry') {
+          const tel = iterationStateService.getTelemetry();
+          appendLine(`[PER-ITERATION STATE PERSISTENCE TELEMETRY]
+Total Iterations  : #${tel.totalIterationsRecorded}
+Sliding RAM Window: ${tel.inMemorySnapshotsCount} active snapshots
+Sparse Archived   : ${tel.archivedSparseSnapshotsCount} bands in ${tel.activeSparsebundle}
+Raw Bytes Total   : ${tel.totalRawBytes} B
+Compressed Bytes  : ${tel.totalCompressedBytes} B
+Storage Savings   : ${tel.spaceReductionPercentage} REDUCTION (Zero Unbounded Consumption)
+Last Compacted    : ${new Date(tel.lastCompactedAt).toLocaleTimeString()}`, 'table', '💾');
+        } else if (sub === 'compact') {
+          const res = iterationStateService.compactStorage();
+          appendLine(`Compacted state storage vault. Sparsity: ${res.sparsitySaving}`, 'success', '🧹');
+        } else {
+          appendLine('Usage: state <status | compact | telemetry>', 'error');
+        }
+        break;
+      }
+
       default: {
         // Check if command is an alias in /etc/macros.json
         try {
@@ -2298,7 +3045,7 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
           // No aliases or file missing, continue
         }
 
-        // Check if command is executable script in /root/scripts
+        // Check if command is an executable script in cwd or /root/scripts
         try {
           const scriptContent = vfs.readFile(cwd, raw);
           const lines = scriptContent.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
@@ -2306,10 +3053,15 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
           for (const line of lines) {
             await processCommand(line);
           }
+          break;
         } catch {
-          appendLine(`Command not found: '${cmd}'. Type 'help' to inspect command matrix.`, 'error');
-          audioVoiceService.playErrorChirp();
+          // Not an internal script
         }
+
+        // Gemini Interactive Default Starting Mode:
+        // Natural language conversation & voice queries automatically route directly to Gemini duplex
+        // without requiring a "gemini" or "ai" wake word!
+        await callGeminiChat(raw);
         break;
       }
     }
@@ -2564,6 +3316,7 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
   }
 
   const isClearMode = envState.terminalOpacity <= 0.15;
+  const sentimentVisual = getSentimentVisualConfig(envState.sentiment, isClearMode, envState.highContrast);
 
   const liveLed = envState.rgbLed?.enabled
     ? computeRgbLedState(Date.now() / 1000, envState.rgbLed)
@@ -2736,7 +3489,7 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
       {/* The Sole UI: HyperTerminal Container */}
       {!isPureCanvas && (
         <div
-          className={`${containerPositionClass} z-30 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 font-mono select-none relative shadow-2xl`}
+          className={`${containerPositionClass} z-30 rounded-2xl flex flex-col overflow-hidden font-mono select-none relative shadow-2xl`}
           style={{
             backgroundColor: envState.highContrast
               ? 'rgba(0, 0, 0, 0.98)'
@@ -2745,20 +3498,22 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
               : `rgba(4, 9, 20, ${envState.terminalOpacity})`,
             backdropFilter: isClearMode ? 'blur(3px)' : 'blur(20px)',
             WebkitBackdropFilter: isClearMode ? 'blur(3px)' : 'blur(20px)',
+            filter: sentimentVisual.filter,
+            transition: 'filter 700ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 700ms cubic-bezier(0.4, 0, 0.2, 1), border-color 700ms cubic-bezier(0.4, 0, 0.2, 1)',
             border: envState.highContrast
               ? '2px solid #00f2ff'
               : isClearMode
               ? '1px solid rgba(0, 242, 255, 0.45)'
               : liveLed
               ? `1px solid ${liveLed.primaryHex}66`
-              : `1px solid ${envState.primaryColor}55`,
+              : sentimentVisual.borderColor,
             boxShadow: envState.highContrast
               ? '0 0 30px rgba(0, 242, 255, 0.5), inset 0 0 20px rgba(0, 242, 255, 0.2)'
               : isClearMode
               ? '0 0 35px rgba(0, 242, 255, 0.25), inset 0 0 20px rgba(0, 242, 255, 0.08)'
               : liveLed
               ? `0 10px 40px rgba(0, 0, 0, 0.8), 0 0 32px ${liveLed.primaryHex}25`
-              : `0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px ${envState.primaryColor}22`,
+              : sentimentVisual.boxShadow,
           }}
         >
           {/* Dynamic High-End RGB-LED HSL% Hue Gradient Top Strip */}
@@ -3272,6 +4027,149 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
             </div>
           </div>
 
+          {/* Gemini Interactive Always-Listening Alert Banner & Sentiment Mood Status HUD */}
+          <div
+            className="px-3 py-1.5 bg-gradient-to-r from-purple-950/40 via-black/85 to-cyan-950/40 border-b flex flex-wrap items-center justify-between gap-2.5 text-[11px] shrink-0 select-none z-10 transition-colors duration-500"
+            style={{
+              borderColor: sentimentVisual.borderColor,
+            }}
+          >
+            {/* Left: Interactive Duplex Wake-Word State Indicator */}
+            <div className="flex items-center gap-2">
+              {isMicListening ? (
+                isWakeGated ? (
+                  wakeState === 'active' ? (
+                    <button
+                      type="button"
+                      onClick={() => audioVoiceService.deactivateWakeState()}
+                      className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-[10px] font-bold bg-emerald-500/25 text-emerald-300 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.45)] cursor-pointer transition-all animate-pulse"
+                      title="Active Speech State: Gemini is attentive and listening directly. Click to return to passive stasis."
+                    >
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                      </span>
+                      <span className="tracking-wide">⚡ ACTIVE SPEECH STATE // ATTENTIVE</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioVoiceService.activateWakeState('manual_click');
+                        audioVoiceService.speak('Yes? I am listening.');
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-[10px] font-bold bg-cyan-950/40 text-cyan-300 border-cyan-500/50 hover:border-cyan-400 shadow-[0_0_10px_rgba(0,242,255,0.2)] cursor-pointer transition-all"
+                      title="Passive Standby Listening: Interface is listening quietly until addressed with 'Gemini' or 'Terminal' (Click to wake manually)"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-cyan-400/80 animate-pulse"></span>
+                      <span className="tracking-wide">PASSIVE LISTENING // SAY &ldquo;GEMINI&rdquo;</span>
+                    </button>
+                  )
+                ) : (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-[10px] font-bold bg-purple-500/20 text-purple-300 border-purple-400"
+                    title="Open microphone continuous mode"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
+                    <span className="tracking-wide">OPEN DIRECT LISTENING</span>
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-[10px] font-bold bg-black/50 text-slate-400 border-slate-800">
+                  <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                  <span className="tracking-wide">MIC STANDBY</span>
+                </div>
+              )}
+
+              {/* Informative helper hint */}
+              <span className="text-slate-300 text-[10px] hidden lg:inline">
+                {wakeState === 'active'
+                  ? 'Active speech window open — speak commands or ask anything directly'
+                  : 'Passively listening in background until addressed with "Gemini" or "Terminal"'}
+              </span>
+            </div>
+
+            {/* Right: Wake Mode Toggle, Operational Sentiment Mood & Female Voice Profile */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Wake Word Gating Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isWakeGated;
+                  audioVoiceService.setWakeWordEnabled(next);
+                  setIsWakeGated(next);
+                  audioVoiceService.playTone(next ? 880 : 440, 'sine', 60);
+                }}
+                className={`px-2 py-0.5 rounded-lg border text-[10px] font-mono font-bold transition cursor-pointer flex items-center gap-1 ${
+                  isWakeGated
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 hover:bg-cyan-500/30'
+                    : 'bg-black/50 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+                title={
+                  isWakeGated
+                    ? "Wake-Word Listener: ON (Interface remains passively listening until addressed)"
+                    : "Wake-Word Listener: OFF (Continuous direct listening)"
+                }
+              >
+                <Zap className="w-3 h-3 text-cyan-400" />
+                <span>WAKE: {isWakeGated ? 'GATED' : 'OPEN'}</span>
+              </button>
+
+              {/* OpenWrt Gateway & Cyber Operations Dashboard Pill */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNetSecDashboardOpen(true);
+                  audioVoiceService.playEarcon('success');
+                }}
+                className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-500/60 text-[10px] text-emerald-300 font-mono hover:bg-emerald-500/30 hover:border-emerald-400 transition cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                title="Kali Linux, OpenWrt Gateway & Real-Time D3 Packet Flow Dashboard. Click to open operations center."
+              >
+                <Shield className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span>NETSEC & GW: [96% SECURE]</span>
+              </button>
+
+              {/* Resilient Key Pool Always-On Pill */}
+              <button
+                type="button"
+                onClick={() => processCommand('apikey status')}
+                className="hidden xl:flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-500/40 text-[10px] text-cyan-300 font-mono hover:bg-cyan-500/25 hover:border-cyan-400 transition cursor-pointer"
+                title="Resilient Multi-Key Pool: Seamless Quota Auto-Failover. Click for telemetry."
+              >
+                <Zap className="w-3 h-3 text-cyan-400" />
+                <span>KEYS: ALWAYS-ON</span>
+              </button>
+
+              {/* Voice Profile Badge */}
+              <button
+                type="button"
+                onClick={() => setIsVoiceModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-black/60 border border-purple-500/40 text-[10px] text-purple-300 font-mono hover:border-purple-400 transition cursor-pointer"
+                title="Active Female Neural Voice Profile (528Hz Solfeggio carrier). Click to customize."
+              >
+                <Radio className="w-3 h-3 text-purple-400 animate-pulse" />
+                <span>
+                  VOICE: {envState.voiceProfile === 'gemini_female' ? 'GEMINI ♀ 528Hz' : envState.voiceProfile.toUpperCase()}
+                </span>
+              </button>
+
+              {/* Sentiment Operational Mood Shift Tag */}
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all duration-500"
+                style={{
+                  backgroundColor: `${sentimentVisual.accentColor}18`,
+                  borderColor: `${sentimentVisual.accentColor}66`,
+                  color: sentimentVisual.accentColor,
+                  boxShadow: `0 0 10px ${sentimentVisual.accentColor}25`,
+                }}
+                title={`AI Operational Mood & Dynamic Filter: ${envState.sentiment.toUpperCase()}`}
+              >
+                <span>{sentimentVisual.glyph}</span>
+                <span className="tracking-wide">{sentimentVisual.badgeLabel}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Terminal Command Stream & Inline Code Editor */}
           <div ref={scrollRef} className="flex-1 p-3.5 overflow-y-auto space-y-2 text-xs select-text font-mono">
             {/* Inline Editor Overlay if user ran edit/nano */}
@@ -3581,6 +4479,13 @@ ${envState.mountedDevices.map((d) => `  ${d} on / (read/write, plug-n-play, auto
             rgbLed: { ...prev.rgbLed, ...updated },
           }))
         }
+      />
+
+      {/* Kali Linux & OpenWrt Defensive Cyber Operations Dashboard with D3 Real-Time Packet Stream */}
+      <NetworkSecurityDashboard
+        isOpen={isNetSecDashboardOpen}
+        onClose={() => setIsNetSecDashboardOpen(false)}
+        onExecuteCommand={executeCommand}
       />
 
       {/* ChromeVox Screen Reader ARIA Live Announcer Region */}

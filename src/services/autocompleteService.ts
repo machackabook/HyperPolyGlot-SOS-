@@ -139,6 +139,11 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'mic on', category: 'AI & Voice', description: 'Enable microphone audio input for real-time border waveform & voice commands', badge: 'MIC' },
   { command: 'mic off', category: 'AI & Voice', description: 'Disable microphone audio input and speech recognition', badge: 'MIC' },
   { command: 'listen', category: 'AI & Voice', description: 'Toggle microphone voice listening and border waveform', badge: 'MIC' },
+  { command: 'wakeword', category: 'AI & Voice', description: 'Inspect lightweight wake-word listener telemetry & active speech state', badge: 'WAKE' },
+  { command: 'wakeword on', category: 'AI & Voice', description: 'Enable passive standby listening until addressed with "Gemini" or "Terminal"', badge: 'WAKE' },
+  { command: 'wakeword off', category: 'AI & Voice', description: 'Disable wake-word gating (continuous direct attentive speech)', badge: 'WAKE' },
+  { command: 'wakeword test', category: 'AI & Voice', description: 'Trigger active speech state test ("Yes? I am listening")', badge: 'WAKE' },
+  { command: 'wakeword timeout 15', category: 'AI & Voice', description: 'Set active speech dwell timeout window in seconds', badge: 'WAKE' },
   { command: 'gemini explain quantum coherence', category: 'AI & Voice', description: 'Ask AI, alter 3D background visual, and project speech', badge: 'AI' },
   { command: 'gemini create neural shader', category: 'AI & Voice', description: 'Generate procedural shader code with AI', badge: 'AI' },
   { command: 'ai analyze sentiment', category: 'AI & Voice', description: 'Trigger AI conversation with in-visual voice synthesis', badge: 'AI' },
@@ -193,6 +198,7 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'history --export', category: 'System', description: 'Export command history log to shell script file in VFS', badge: 'HIST' },
 
   // Voice Personas & Accessibility
+  { command: 'voice profile gemini_female', category: 'AI & Voice', description: 'Switch to Gemini Neural Female (528 Hz, natural conversational flow)', badge: 'VOICE' },
   { command: 'voice profile sovereign', category: 'AI & Voice', description: 'Switch to Sovereign Core (432 Hz, authoritative)', badge: 'VOICE' },
   { command: 'voice profile quantum', category: 'AI & Voice', description: 'Switch to Quantum Echo (528 Hz, harmonic shimmer)', badge: 'VOICE' },
   { command: 'voice profile cyber', category: 'AI & Voice', description: 'Switch to Cyber Pulse (963 Hz, robotic vocoder)', badge: 'VOICE' },
@@ -257,6 +263,56 @@ export const COMMAND_REGISTRY: Omit<CommandSuggestion, 'score'>[] = [
   { command: 'youtube login', category: 'Audio', description: 'Sign in natively with Google Account for system customizations', badge: 'GOOGLE' },
   { command: 'music play synthwave', category: 'Audio', description: 'Stream synthwave music in background video mode', badge: 'MUSIC' },
   { command: 'music modal', category: 'Audio', description: 'Open YouTube music and playlist control center', badge: 'MUSIC' },
+
+  // OpenWrt Gateway & Network Security (Defensive Administration)
+  { command: 'gateway status', category: 'Network', description: 'Inspect OpenWrt 23.05.3 gateway router state, uptime, and interfaces', badge: 'OPENWRT' },
+  { command: 'openwrt status', category: 'Network', description: 'Inspect OpenWrt router status, hardware info, and memory load', badge: 'OPENWRT' },
+  { command: 'openwrt firewall', category: 'Network', description: 'Inspect UCI firewall zones, forwarding policies, and rules', badge: 'FIREWALL' },
+  { command: 'openwrt dhcp', category: 'Network', description: 'List active DHCP client leases, hostnames, and MAC addresses', badge: 'DHCP' },
+  { command: 'openwrt wireless', category: 'Network', description: 'Inspect Wi-Fi 6 (802.11ax) WPA3-SAE and PMF configuration', badge: 'WIFI' },
+  { command: 'openwrt isolate 192.168.1.105', category: 'Network', description: 'Quarantine rogue device into isolated DROP policy', badge: 'SEC-ISOLATE' },
+  { command: 'openwrt release 192.168.1.105', category: 'Network', description: 'Release device quarantine and restore normal LAN access', badge: 'SEC-RELEASE' },
+
+  // SSH Session Management & Remote Execution
+  { command: 'ssh status', category: 'Network', description: 'List active persistent SSH sessions, cipher suites, and latency', badge: 'SSH' },
+  { command: 'ssh connect root@192.168.1.1:22', category: 'Network', description: 'Establish persistent SSH session to OpenWrt gateway (Ed25519)', badge: 'SSH' },
+  { command: 'ssh connect kali@192.168.1.150:22', category: 'Network', description: 'Establish SSH session to Kali SecOps node (Ed25519)', badge: 'SSH' },
+  { command: 'ssh exec root@192.168.1.1 uci show firewall', category: 'Network', description: 'Execute remote UCI command over established SSH session', badge: 'SSH-EXEC' },
+  { command: 'ssh keygen', category: 'Network', description: 'Generate sovereign Ed25519 SSH identity keypair', badge: 'SSH-KEY' },
+
+  // Kali Defensive Workloads & NetSec Auditing
+  { command: 'netsec audit', category: 'Network', description: 'Execute comprehensive defensive security posture & kernel audit', badge: 'AUDIT' },
+  { command: 'netsec scan', category: 'Network', description: 'Inspect local subnet devices and detect anomalies', badge: 'NETSEC' },
+  { command: 'netsec tools', category: 'Network', description: 'Display Kali Linux defensive toolchain (Suricata, Wireshark, Lynis, Nmap)', badge: 'KALI' },
+  { command: 'netsec harden', category: 'Network', description: 'Enforce defensive kernel sysctls (tcp_syncookies, rp_filter)', badge: 'HARDEN' },
+
+  // Resilient API Key Pool Telemetry
+  { command: 'apikey status', category: 'System', description: 'Inspect resilient multi-key pool health, active key, and failover status', badge: 'KEY-POOL' },
+
+  // Cyber Operations Dashboard
+  { command: 'dashboard', category: 'Network', description: 'Open Kali Linux & OpenWrt Defensive Cyber Operations Dashboard with D3 Real-Time Packet Stream', badge: 'DASHBOARD' },
+  { command: 'netsec dashboard', category: 'Network', description: 'Open D3 Real-Time Packet Flow & Security Posture Dashboard', badge: 'DASHBOARD' },
+
+  // Virtual Sparsebundle Disk Image Engine
+  { command: 'sparsebundle status', category: 'System', description: 'List virtual sparse disk images, allocation bands, and sparsity ratios', badge: 'SPARSE' },
+  { command: 'sparsebundle create StateVault 50', category: 'System', description: 'Create virtual 50GB sparse disk image with 64KB on-demand bands', badge: 'SPARSE' },
+  { command: 'sparsebundle compact StateVault.sparsebundle', category: 'System', description: 'Reclaim unused zeroed bands to minimize physical storage', badge: 'COMPACT' },
+
+  // Prime Mathematica High-Integer Compression & Encoding
+  { command: 'prime compress "State snapshot data"', category: 'System', description: 'Compress data using 18-digit high-integer prime polynomial residues', badge: 'PRIME' },
+  { command: 'prime stats', category: 'System', description: 'Inspect canonical prime (137451921129154222) and Mersenne M61 parameters', badge: 'PRIME' },
+  { command: 'prime verify "sovereign"', category: 'System', description: 'Compute Fermat-Euler verification residue and coprime lock', badge: 'PRIME' },
+
+  // Pipethru Workflows & High-Speed Toolchain
+  { command: 'bun test', category: 'System', description: 'Execute automated test runner at native microsecond speeds', badge: 'BUN' },
+  { command: 'bun run Math.pow(2, 16)', category: 'System', description: 'Evaluate high-speed computational JS/TS in Bun runtime sandbox', badge: 'BUN' },
+  { command: 'uv pip list', category: 'System', description: 'Inspect Python packages using Astral UV Rust package manager', badge: 'UV' },
+  { command: 'uv pip install sympy', category: 'System', description: 'Fast parallel package resolution and installation via UV in Rust', badge: 'UV' },
+  { command: 'pip list', category: 'System', description: 'List installed Python mathematical and cryptographic packages', badge: 'PIP' },
+
+  // Lightweight Per-Iteration State Snapshotting
+  { command: 'state status', category: 'System', description: 'Display per-iteration state persistence telemetry and storage reduction %', badge: 'STATE' },
+  { command: 'state compact', category: 'System', description: 'Compact state vault sparsebundle and prune storage footprint', badge: 'STATE' },
 ];
 
 export const CONTEXT_PARAM_EXPANSIONS: Record<
