@@ -301,17 +301,7 @@ Allocated     : ${res.bandsAllocated} sparse bands`,
       return '1.1.20';
     }
     if (sub === 'test') {
-      return `bun test v1.1.20 (x86_64-linux)
-✓ src/services/netSecService.test.ts > Gateway status returns OpenWrt 23.05.3 (0.42ms)
-✓ src/services/netSecService.test.ts > Defensive audit produces >= 90 score (0.35ms)
-✓ src/services/netSecService.test.ts > Device quarantine and release workflow (0.28ms)
-✓ src/services/netSecService.test.ts > Kali Linux defensive toolchain inventory (0.19ms)
-✓ src/services/sparsebundleService.test.ts > Virtual Sparsebundle creates & allocates bands (0.51ms)
-✓ src/services/primeMathCompressor.test.ts > High-integer prime compression & reversible decompress (0.44ms)
-
- 6 pass
- 0 fail
- Ran 6 tests across 3 files. [Total: 2.19ms]`;
+      return 'Tests are not executable from the website sandbox. Run the repository test runner in an authorized CI or local environment and attach the real test output.';
     }
     if (sub === 'run') {
       const script = args.slice(1).join(' ');

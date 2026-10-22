@@ -553,7 +553,7 @@ export const NetworkSecurityDashboard: React.FC<NetworkSecurityDashboardProps> =
                   <span className="font-bold text-white">ACTIVE PERSISTENT SSH SESSIONS</span>
                   <button
                     onClick={() => {
-                      sshService.createSession('kali@192.168.1.150:22');
+                      setSshOutput('SSH_NOT_CONNECTED: Authenticated live SSH transport has not been configured. No session was created.');
                       setSshSessions(sshService.getSessions());
                       audioVoiceService.playEarcon('success');
                     }}

@@ -2726,83 +2726,11 @@ All WAN/LAN forwarding from this IP is now severed.`, 'good', '🛑');
       // PERSISTENT SSH SESSION MANAGEMENT & REMOTE EXEC
       // ==========================================
       case 'ssh': {
-        const sub = (args[0] || 'status').toLowerCase();
-        if (sub === 'status' || sub === 'list') {
-          const sessions = sshService.getSessions();
-          audioVoiceService.playEarcon('switch');
-          appendLine(`[ACTIVE PERSISTENT SSH SESSIONS]
-${'SESSION ID'.padEnd(26)} ${'TARGET HOST'.padEnd(26)} ${'CIPHER SUITE'.padEnd(28)} LATENCY  STATUS
-${'─'.repeat(95)}
-${sessions.map((s) => `${s.id.padEnd(26)} ${s.target.padEnd(26)} ${s.cipherSuite.slice(0, 26).padEnd(28)} ${s.latencyMs.toFixed(1)}ms   🟢 ${s.status}`).join('\n')}
-
-Persistent keepalive heartbeats active every 15s.`, 'table', '🔒');
-        } else if (sub === 'connect') {
-          const target = args[1];
-          if (!target) {
-            appendLine('Usage: ssh connect <user@host[:port]> (e.g. ssh connect root@192.168.1.1:22)', 'error');
-            break;
-          }
-          const session = sshService.createSession(target);
-          audioVoiceService.playEarcon('success');
-          appendLine(`[SSH HANDSHAKE SUCCESSFUL]
-Connected to: ${session.target}
-Session ID  : ${session.id}
-Key Exchange: ${session.kexAlgorithm}
-Cipher Suite: ${session.cipherSuite}
-Identity    : ~/.ssh/${session.identityKey}
-Heartbeat   : 15s interval (Keepalive active)`, 'success', '🔑');
-        } else if (sub === 'disconnect' || sub === 'close') {
-          const target = args[1];
-          if (!target) {
-            appendLine('Usage: ssh disconnect <session_id | host>', 'error');
-            break;
-          }
-          const ok = sshService.disconnect(target);
-          if (ok) {
-            appendLine(`SSH session '${target}' closed cleanly.`, 'system');
-          } else {
-            appendLine(`SSH session '${target}' not found. Run 'ssh status' to list active sessions.`, 'error');
-          }
-        } else if (sub === 'exec' || sub === 'run') {
-          const sessionId = args[1];
-          const remoteCmd = args.slice(2).join(' ');
-          if (!sessionId || !remoteCmd) {
-            appendLine('Usage: ssh exec <sessionId | host> <remote_command>\nExample: ssh exec root@192.168.1.1 uci show firewall', 'error');
-            break;
-          }
-          const result = sshService.executeRemoteCommand(sessionId, remoteCmd);
-          if (result.exitCode === 0) {
-            appendLine(`[SSH: ${sessionId} // Command: "${result.command}" // ${result.durationMs}ms]
-${result.stdout}`, 'output');
-          } else {
-            appendLine(`[SSH: ${sessionId} ERROR // Exit Code ${result.exitCode} // ${result.durationMs}ms]
-${result.stderr}`, 'error');
-          }
-        } else if (sub === 'keygen') {
-          const pubKey = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIInq58W2P7f7Q6M3S9V8K1X0L5Z4D2G8J7F9 sovereign@hyperterminal';
-          appendLine(`[SOVEREIGN ED25519 SSH KEYPAIR GENERATED]
-Private key saved to : /root/.ssh/id_ed25519
-Public key saved to  : /root/.ssh/id_ed25519.pub
-Fingerprint          : SHA256:7uK2xL8mP0w9vR4tY1qZ6sA3dF5gH7jK2 sovereign@hyperterminal
-Public Key:
-${pubKey}`, 'success', '🗝️');
-        } else {
-          // If called as `ssh root@192.168.1.1` or `ssh kali@192.168.1.150`
-          const target = args[0];
-          if (target.includes('@') || target.includes('.')) {
-            const session = sshService.createSession(target);
-            audioVoiceService.playEarcon('success');
-            appendLine(`Established SSH session '${session.id}' to ${session.target}. Use 'ssh exec ${session.id} <command>' to run remote instructions.`, 'success', '🔒');
-          } else {
-            appendLine('Usage: ssh <status | connect <user@host> | exec <id> <command> | disconnect <id> | keygen>', 'error');
-          }
-        }
+        appendLine('SSH is not connected. Browser-only JavaScript cannot establish an SSH transport. No handshake, cipher or command success is claimed. Configure an authenticated, user-authorized remote bridge before enabling SSH actions.', 'error', '🔒');
         break;
       }
 
-      // ==========================================
-      // DEFENSIVE NETWORK SECURITY AUDITING & KALI WORKLOADS
-      // ==========================================
+      // Never substitute invented firewall/SSH evidence.
       case 'netsec':
       case 'kali': {
         const sub = (args[0] || 'audit').toLowerCase();
@@ -2818,8 +2746,8 @@ ${pubKey}`, 'success', '🗝️');
           appendLine(`[DEFENSIVE NETWORK SECURITY & KERNEL POSTURE AUDIT]
 Audit Timestamp : ${report.timestamp}
 Target Gateway  : ${report.gatewayIp} (OpenWrt Hardened)
-Security Score  : ${report.securityScore} / 100 [MAXIMUM DEFENSE POSTURE]
-Quarantined IPs : ${report.quarantinedIps.length > 0 ? report.quarantinedIps.join(', ') : 'None (Zero active threats)'}
+Security Evidence: ${report.sourceVerified ? report.securityScore + ' / 100' : 'UNVERIFIED - no live authenticated gateway data'}
+Quarantined IPs : ${report.quarantinedIps.length > 0 ? report.quarantinedIps.join(', ') : 'Unknown (no authenticated gateway telemetry)'}
 
 AUDIT CHECKS:
 ${report.checks.map((c) => `  [${c.status === 'PASS' ? ' PASS ' : ' WARN '}] ${c.category.padEnd(9)} : ${c.title}\n           Value: ${c.value}`).join('\n')}`, 'table', '🛡️');
