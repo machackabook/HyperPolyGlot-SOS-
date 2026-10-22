@@ -70,10 +70,10 @@ export const NetworkSecurityDashboard: React.FC<NetworkSecurityDashboardProps> =
       for (let i = 20; i >= 0; i--) {
         packetFlowHistory.current.push({
           time: now - i * 1000,
-          wanInbound: Math.round(180 + Math.random() * 80),
-          lanForwarded: Math.round(140 + Math.random() * 60),
-          suricataFiltered: Math.round(8 + Math.random() * 14),
-          wifiEncrypted: Math.round(90 + Math.random() * 40),
+          wanInbound: 0,
+          lanForwarded: 0,
+          suricataFiltered: 0,
+          wifiEncrypted: 0,
         });
       }
     }
@@ -82,10 +82,10 @@ export const NetworkSecurityDashboard: React.FC<NetworkSecurityDashboardProps> =
       const now = Date.now();
       const newPoint: PacketFlowDataPoint = {
         time: now,
-        wanInbound: Math.round(160 + Math.sin(now / 3000) * 40 + Math.random() * 50),
-        lanForwarded: Math.round(130 + Math.cos(now / 2500) * 30 + Math.random() * 40),
-        suricataFiltered: Math.round(5 + Math.random() * 18),
-        wifiEncrypted: Math.round(85 + Math.random() * 45),
+        wanInbound: 0,
+        lanForwarded: 0,
+        suricataFiltered: 0,
+        wifiEncrypted: 0,
       };
 
       packetFlowHistory.current.push(newPoint);

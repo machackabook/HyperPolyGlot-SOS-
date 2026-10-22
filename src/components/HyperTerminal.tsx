@@ -700,24 +700,6 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
       let d3Update: Partial<EnvironmentState['d3Stream']> = {};
       if (data.d3Stream) {
         d3Update = { ...data.d3Stream, active: true };
-      } else if (/network|packet|stream|telemetry|d3|node|graph|traffic|throughput|satcom|ping|cluster|socket/i.test(trimmed)) {
-        const chosenShape: D3StreamShape = /radar|scan|orbital/i.test(trimmed)
-          ? 'radar'
-          : /stream|wave|bandwidth/i.test(trimmed)
-          ? 'streamgraph'
-          : /chord|satellite|ring/i.test(trimmed)
-          ? 'chord'
-          : 'force';
-        d3Update = {
-          active: true,
-          shape: chosenShape,
-          title: `Gemini ${chosenShape.toUpperCase()} Telemetry`,
-          lastCommand: `gemini: ${trimmed.slice(0, 18)}`,
-          geminiTelemetrySummary: data.speechText || `Gemini Telemetry Stream: ${trimmed}`,
-          packetRate: Math.floor(Math.random() * 800 + 1600),
-          throughputMbps: +(Math.random() * 300 + 850).toFixed(1),
-        };
-        audioVoiceService.playEarcon('stream');
       }
 
       setEnvState((prev) => ({
@@ -746,26 +728,7 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         audioVoiceService.speak(data.speechText);
       }
     } catch (err: any) {
-      appendLine(`Gemini Interactive Note: ${err.message}. Synthesizing deterministic neural response.`, 'warn');
-      const chosenShape: D3StreamShape = /radar|scan/i.test(trimmed) ? 'radar' : /stream|wave/i.test(trimmed) ? 'streamgraph' : 'force';
-      setEnvState((prev) => ({
-        ...prev,
-        sentiment: 'creative',
-        primaryColor: '#c084fc',
-        secondaryColor: '#00f2ff',
-        speed: 1.1,
-        d3Stream: {
-          ...prev.d3Stream,
-          active: true,
-          shape: chosenShape,
-          geminiTelemetrySummary: `Neural Stream: Query "${trimmed.slice(0, 32)}" synthesized into D3 ${chosenShape}.`,
-        },
-      }));
-      const fallbackSpeech = `Analyzed your query: ${trimmed.slice(0, 30)}. Background visual modulated.`;
-      appendLine(`[Gemini Neural]: ${fallbackSpeech}`, 'ai', '✨');
-      if (envState.voiceActive) {
-        audioVoiceService.speak(fallbackSpeech);
-      }
+      appendLine('AI request failed: ' + String(err?.message || err) + '. No AI response or telemetry was generated.', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -918,26 +881,12 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
       }
 
       case 'uptime': {
-        const s = Math.floor(performance.now() / 1000);
-        const hrs = Math.floor(s / 3600);
-        const mins = Math.floor((s % 3600) / 60);
-        const secs = s % 60;
-        appendLine(`up ${hrs}h ${mins}m ${secs}s, 1 user, load average: 0.04, 0.01, 0.00`, 'output');
+        const sec = Math.floor(performance.now() / 1000);
+        appendLine('Current browser page session: ' + sec + ' seconds. Remote OS uptime is not accessible without an authorized SSH bridge.', 'output');
         break;
       }
-
       case 'top': {
-        const memTotal = 16384;
-        const memUsed = Math.floor(Math.random() * 4000 + 8000);
-        appendLine(`Tasks: 42 total, 1 running, 41 sleeping, 0 stopped, 0 zombie
-%Cpu(s):  ${(Math.random() * 5 + 2).toFixed(1)} us,  ${(Math.random() * 2 + 1).toFixed(1)} sy,  0.0 ni, 92.4 id,  0.1 wa,  0.0 hi,  0.2 si,  0.0 st
-MiB Mem :  ${memTotal}.0 total,   ${memTotal - memUsed}.0 free,   ${memUsed}.0 used,   456.0 buff/cache
-MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
-
-  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
- 1024 root      20   0  984210  83892  42100 R   ${(Math.random() * 4 + 1).toFixed(1)}   0.5   0:04.12 hyperterminal
-    1 root      20   0    2412   1210   1024 S   0.0   0.0   0:00.08 quine-init
-  512 root      20   0  142850  12410   8200 S   0.1   0.1   0:01.45 d3-stream-engine`, 'table');
+        appendLine('OS process list and CPU statistics are not accessible from browser JavaScript. No process or host metrics were measured. Connect an authenticated remote agent for OS telemetry.', 'error');
         break;
       }
 
@@ -1409,9 +1358,7 @@ MiB Swap:   4096.0 total,   4096.0 free,      0.0 used.  7420.0 avail Mem
           audioVoiceService.playTone(440, 'triangle', 80);
         } else if (sub === 'test' || sub === 'wake' || sub === 'trigger') {
           const word = args[1] || 'gemini';
-          audioVoiceService.activateWakeState(word);
-          appendLine(`Simulated wake word trigger: [${word.toUpperCase()}]. Active speech state engaged.`, 'success', '⚡');
-          audioVoiceService.speak('Yes? I am listening.');
+          appendLine('Wake-word testing requires actual microphone input and speech-recognition evidence. No voice trigger was simulated.', 'error');
         } else if (sub === 'timeout') {
           const sec = parseInt(args[1] || '12', 10);
           if (isNaN(sec) || sec < 3 || sec > 120) {
@@ -1820,88 +1767,28 @@ Usage: d3 stream | shape <force|streamgraph|radar|chord> | density <n> | speed <
       }
 
       case 'ping': {
-        const target = args[0] || 'satcom.orb.net';
-        audioVoiceService.playEarcon('ping');
-        setEnvState((prev) => ({
-          ...prev,
-          d3Stream: {
-            ...prev.d3Stream,
-            active: true,
-            shape: prev.d3Stream.shape === 'radar' ? 'radar' : 'force',
-            title: `ICMP Ping Stream -> ${target}`,
-            lastCommand: `ping ${target}`,
-            packetRate: Math.floor(Math.random() * 500 + 1200),
-            throughputMbps: +(Math.random() * 200 + 400).toFixed(1),
-            jitterMs: +(Math.random() * 0.8 + 0.4).toFixed(2),
-            geminiTelemetrySummary: `Network Echo: Round-trip packet transmission verified to ${target} with zero drop.`,
-          },
-        }));
-
-        appendLine(`PING ${target} (192.0.2.${Math.floor(Math.random() * 200 + 1)}): 56 data bytes
-64 bytes from ${target}: icmp_seq=0 ttl=118 time=12.4 ms [D3 Stream Synchronized]
-64 bytes from ${target}: icmp_seq=1 ttl=118 time=11.8 ms
-64 bytes from ${target}: icmp_seq=2 ttl=118 time=13.1 ms
-64 bytes from ${target}: icmp_seq=3 ttl=118 time=12.0 ms
---- ${target} ping statistics ---
-4 packets transmitted, 4 received, 0.0% packet loss, rtt min/avg/max = 11.8/12.3/13.1 ms`, 'output', '📡');
+        appendLine('ICMP ping is not available from browser JavaScript. No echo requests were sent or received. Use an authenticated node agent for actual ICMP and a verified latency receipt.', 'error');
         break;
       }
-
       case 'netstat': {
-        audioVoiceService.playEarcon('stream');
-        setEnvState((prev) => ({
-          ...prev,
-          d3Stream: {
-            ...prev.d3Stream,
-            active: true,
-            shape: 'force',
-            title: 'Socket Connection Mesh',
-            lastCommand: 'netstat',
-            nodeCount: 36,
-            packetRate: 1850,
-            throughputMbps: 924.5,
-            geminiTelemetrySummary: 'Live Network Sockets: 8 TCP established, 4 UDP telemetry streams active.',
-          },
-        }));
-
-        appendLine(`Active Internet connections (servers and established)
-Proto Recv-Q Send-Q Local Address          Foreign Address        State       D3_NODE
-tcp        0      0 127.0.0.1:3000         0.0.0.0:*              LISTEN      GATEWAY-0
-tcp        0      0 127.0.0.1:8080         0.0.0.0:*              LISTEN      EDGE-1
-tcp        0      0 10.0.4.12:44320        142.250.190.46:443     ESTABLISHED EDGE-4
-tcp        0      0 10.0.4.12:53325        533.25.MHz.atsc:sat    ESTABLISHED EDGE-8
-udp        0      0 0.0.0.0:963            0.0.0.0:*                          SOLFEGGIO
-udp        0      0 0.0.0.0:1420           satcom.orb.net:1420    CONNECTED   EDGE-12
-[D3 Network Force Mesh Rendered in Background]`, 'table');
+        appendLine('Browser JavaScript cannot enumerate operating-system sockets. No listening ports, TCP sessions or traffic samples have been verified.', 'error');
         break;
       }
-
       case 'curl':
       case 'fetch': {
-        const url = args[0] || 'https://api.matrix.os/stream';
-        audioVoiceService.playEarcon('stream');
-        setEnvState((prev) => ({
-          ...prev,
-          d3Stream: {
-            ...prev.d3Stream,
-            active: true,
-            shape: 'streamgraph',
-            title: `HTTP Payload Stream (${url.slice(0, 24)})`,
-            lastCommand: `curl ${url}`,
-            throughputMbps: 1120.4,
-            packetRate: 3400,
-            geminiTelemetrySummary: `HTTP 200 Stream Transfer from ${url} complete. Bandwidth allocated.`,
-          },
-        }));
-
-        appendLine(`HTTP/2 200 OK
-server: Matrix-Gateway/4.1.0-sovereign
-date: ${new Date().toUTCString()}
-content-type: application/octet-stream; charset=binary
-x-d3-stream-throughput: 1120.4 MB/s
-x-telemetry-status: STREAM_ACTIVE
-
-{"status":"ok","nodes_active":6000,"carrier":"533.25MHz","quanta_flow":"optimal"}`, 'table');
+        const target=args[0];
+        if(!target || !/^https:\/\//i.test(target)) {
+          appendLine('Usage: fetch https://your-authorized-endpoint (HTTPS and CORS required). No request sent.', 'error');
+          break;
+        }
+        try {
+          const started=performance.now();
+          const response=await fetch(target,{method:'GET',signal:AbortSignal.timeout(9000)});
+          const elapsed=Math.round(performance.now()-started);
+          const contentType=response.headers.get('content-type')||'not supplied';
+          const text=/(text\/|json|xml)/i.test(contentType)?(await response.text()).slice(0,3500):'[non-text response body not shown]';
+          appendLine('ACTUAL FETCH '+target+'\nHTTP '+response.status+' '+response.statusText+'\nElapsed '+elapsed+'ms (browser request, not ICMP or throughput)\nContent-Type: '+contentType+'\n'+text, response.ok?'output':'error');
+        } catch(err:any){appendLine('Actual HTTPS request failed (possibly blocked by CORS, network or timeout): '+String(err?.message||err), 'error');}
         break;
       }
 

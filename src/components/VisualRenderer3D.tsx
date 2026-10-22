@@ -968,9 +968,9 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       if (currentEnv.d3Stream.active) {
         const hist = telemetryHistory.current;
         // Shift and push new values with slight aesthetic jitter
-        const pkts = currentEnv.d3Stream.packetRate + (Math.random() - 0.5) * 40;
-        const tp = currentEnv.d3Stream.throughputMbps + (Math.random() - 0.5) * 10;
-        const jt = currentEnv.d3Stream.jitterMs + (Math.random() - 0.5) * 0.1;
+        const pkts = currentEnv.d3Stream.packetRate;
+        const tp = currentEnv.d3Stream.throughputMbps;
+        const jt = currentEnv.d3Stream.jitterMs;
 
         hist.packets.shift(); hist.packets.push(pkts);
         hist.throughput.shift(); hist.throughput.push(tp);

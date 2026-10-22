@@ -80,16 +80,12 @@ export const D3DataStreamVisualizer: React.FC<D3DataStreamVisualizerProps> = ({
     }
   }, [config.palette, primaryColor, secondaryColor]);
 
-  // Telemetry fluctuation heartbeat
+  // Display received values exactly, without synthesizing live network traffic.
   useEffect(() => {
-    if (!config.active) return;
-    const interval = setInterval(() => {
-      setLivePackets((prev) => Math.max(200, Math.floor(prev + (Math.random() - 0.48) * 80)));
-      setLiveThroughput((prev) => +(Math.max(120, prev + (Math.random() - 0.48) * 35)).toFixed(1));
-      setLiveJitter((prev) => +(Math.max(0.4, prev + (Math.random() - 0.5) * 0.25)).toFixed(2));
-    }, 800);
-    return () => clearInterval(interval);
-  }, [config.active]);
+    setLivePackets(config.packetRate);
+    setLiveThroughput(config.throughputMbps);
+    setLiveJitter(config.jitterMs);
+  }, [config.packetRate,config.throughputMbps,config.jitterMs]);
 
   // Main D3 Rendering Engine
   useEffect(() => {
