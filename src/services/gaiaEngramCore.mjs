@@ -43,6 +43,23 @@ export function createEngramFabric({maxRecords=25000,allowedSources=null}={}){
       versions.set(r.sourceId,version);ingestCount++;
       return {status:old?'updated':'inserted',sourceId:r.sourceId,version};
     },
+    restoreRecords(snapshot) {
+      if(!Array.isArray(snapshot)||snapshot.length>maxRecords)throw new TypeError('Invalid snapshot record set');
+      const staged=new Map();
+      for(const item of snapshot){
+        const r=sourceRecord(item);
+        if(permitted&&!permitted.has(r.sourceId.split(':')[0]))throw new Error('Unauthorized snapshot source');
+        if(!Number.isSafeInteger(item.version)||item.version<1||item.version>10000000)
+          throw new Error('Invalid stored revision number');
+        if(staged.has(r.sourceId))throw new Error('Duplicate snapshot record');
+        staged.set(r.sourceId,Object.freeze({...r,version:item.version}));
+      }
+      records.clear();versions.clear();recalled.clear();duplicates=0;ingestCount=0;
+      for(const r of staged.values()){
+        records.set(r.sourceId,r);versions.set(r.sourceId,r.version);ingestCount+=r.version;
+      }
+      return {restored:records.size,revisionEvents:ingestCount};
+    },
     recall(query,{limit=5,visibility='private',sourcePrefix=null}={}){
       if(typeof query!=='string'||!query.trim()||query.length>512)throw new TypeError('Query length 1-512');
       if(!Number.isSafeInteger(limit)||limit<1||limit>25)throw new RangeError('Recall limit');
