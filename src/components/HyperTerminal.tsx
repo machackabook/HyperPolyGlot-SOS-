@@ -85,7 +85,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe', 'memory'
 ];
 
 export interface SentimentVisualConfig {
@@ -260,39 +260,10 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   const [isEngramsModalOpen, setIsEngramsModalOpen] = useState(false);
   const [isColorProfileModalOpen, setIsColorProfileModalOpen] = useState(false);
   const [isNetSecDashboardOpen, setIsNetSecDashboardOpen] = useState(false);
-  const [engramsMarkdown, setEngramsMarkdown] = useState<string>(MASTER_GEMINI_MD_DEFAULT);
+  // No authoritative engram context before authenticated retrieval.
+  const [engramsMarkdown, setEngramsMarkdown] = useState<string>('');
   const [chromeVoxAnnounce, setChromeVoxAnnounce] = useState('');
-  const [commandHistoryItems, setCommandHistoryItems] = useState<CommandHistoryItem[]>([
-    {
-      id: 'hist-init-1',
-      command: 'render torus',
-      timestamp: '10:00:01 AM',
-      category: '3D',
-      status: 'success',
-      durationMs: 14,
-      cwd: '/root',
-      starred: true,
-    },
-    {
-      id: 'hist-init-2',
-      command: 'satcom ping',
-      timestamp: '10:02:15 AM',
-      category: 'NET',
-      status: 'success',
-      durationMs: 33,
-      cwd: '/root',
-      starred: true,
-    },
-    {
-      id: 'hist-init-3',
-      command: 'd3 shape force',
-      timestamp: '10:05:42 AM',
-      category: 'NET',
-      status: 'success',
-      durationMs: 22,
-      cwd: '/root',
-    },
-  ]);
+  const [commandHistoryItems, setCommandHistoryItems] = useState<CommandHistoryItem[]>([]);
 
   // Macro recorder state
   const [recordingMacro, setRecordingMacro] = useState<string | null>(null);
@@ -785,6 +756,30 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         else appendLine('mesh status | mesh connect | mesh ping | mesh disconnect','system');
         break;
       }
+      case 'memory': {
+        const op = (args[0] || 'status').toLowerCase();
+        if (quineMeshService.status().state !== 'connected') {
+          appendLine('GAIA Memory unavailable: pair the existing authenticated localhost mesh first.', 'system');
+          break;
+        }
+        try {
+          if (op === 'status') {
+            const status = await quineMeshService.scribeStatus();
+            appendLine(JSON.stringify(status,null,2),'output');
+          } else if (op === 'recall' || op === 'search') {
+            const query = args.slice(1).join(' ').trim();
+            if (!query) { appendLine('Usage: memory recall <query>', 'system'); break; }
+            const result: any = await quineMeshService.scribeSearch(query,5);
+            const engrams: any[] = Array.isArray(result.results) ? result.results : [];
+            const snippets = engrams.filter((e:any)=> typeof e.snippet==='string' && typeof e.source_ref==='string')
+              .map((e:any)=>'[SOURCE '+String(e.source_id||'unknown').slice(0,96)+'] ref='+
+                String(e.source_ref).slice(0,260)+'\n'+e.snippet.slice(0,600)).join('\n\n');
+            if (snippets) setEngramsMarkdown(snippets.slice(0,3500));
+            appendLine(JSON.stringify({source:'authenticated-local-scribe',count:engrams.length,engrams},null,2),'output');
+          } else appendLine('memory status | memory recall <query>', 'system');
+        } catch(e:any) { appendLine('Memory retrieval failed: '+String(e?.message||e),'error'); }
+        break;
+      }
       case 'scribe': {
         const op=(args[0]||'status').toLowerCase();
         try {
@@ -858,6 +853,9 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   axs octave <radians>    : Exact Fourier trace coordinates (not device telemetry)
 
 [GAIA CAUSAL INVARIANT CORE]
+  memory status           : Authenticated local Memory Fabric status
+  memory recall <query>   : Source-indexed memory retrieval; cache for AI context
+  scribe search <query>   : Existing local Scribe lookup
   core status             : Real browser-local event and SQE state
   core graph              : Observed ternary sparse graph (count / frequency)
   core phase              : Numerical symplectic state
