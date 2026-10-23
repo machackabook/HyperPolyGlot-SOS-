@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Private GAIA Memory Fabric & Herald ingestion (never publish source engrams)
+gaia-herald-inbox/
+gaia-memory-store/
+.gaia-private/
+*.memory.sqlite
+*.memory.sqlite-wal
+*.memory.sqlite-shm
