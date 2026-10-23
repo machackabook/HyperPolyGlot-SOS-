@@ -7,6 +7,7 @@ import { navigatorService } from '../services/navigatorService';
 import { geoNexusService, GeoTelemetry } from '../services/geoNexusService';
 import { EarthNasaOverlay } from './EarthNasaOverlay';
 import { computeRgbLedState } from '../services/colorProfileService';
+import { causalCore } from '../services/causalCore.mjs';
 import { useState } from 'react';
 
 interface VisualRenderer3DProps {
@@ -105,6 +106,42 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     });
     const torusMesh = new THREE.Mesh(torusGeo, torusMat);
     topologiesGroup.add(torusMesh);
+
+    // Real relation geometry: no links are drawn until the terminal observes events.
+    // Coordinates are deterministic display positions, NOT physical-device locations.
+    const graphEdgeLimit = 64;
+    const relationPositions = new Float32Array(graphEdgeLimit * 4 * 3);
+    const relationGeometry = new THREE.BufferGeometry();
+    relationGeometry.setAttribute('position', new THREE.BufferAttribute(relationPositions, 3));
+    relationGeometry.setDrawRange(0, 0);
+    const relationMaterial = new THREE.LineBasicMaterial({
+      color: 0x00e5ff, transparent: true, opacity: 0.32, depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    const observedRelations = new THREE.LineSegments(relationGeometry, relationMaterial);
+    topologiesGroup.add(observedRelations);
+    let observedSeq = -1;
+    const updateObservedRelations = () => {
+      if (observedSeq === causalCore.seq) return;
+      observedSeq = causalCore.seq;
+      const graph = causalCore.graph();
+      const n = graph.vertices.length;
+      const point = (index: number) => {
+        const theta = n ? 2 * Math.PI * index / n : 0;
+        return [48 * Math.cos(theta), 28 * Math.sin(theta), 16 * Math.sin(theta * 2)];
+      };
+      let offset = 0;
+      for (const edge of graph.entries.slice(0, graphEdgeLimit)) {
+        const pa = point(edge.a), pb = point(edge.b), pc = point(edge.c);
+        for (const [from, to] of [[pa, pc], [pb, pc]]) {
+          relationPositions.set(from, offset);
+          relationPositions.set(to, offset + 3);
+          offset += 6;
+        }
+      }
+      relationGeometry.setDrawRange(0, offset / 3);
+      relationGeometry.attributes.position.needsUpdate = true;
+    };
 
     // Topology B: 4D Tesseract (Hypercube Wireframe)
     const tesseractGroup = new THREE.Group();
@@ -624,11 +661,20 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     let lastTime = performance.now();
     let smoothedAudio = 0;
     let lastSpokenText = '';
+    let lastPresentedAt = 0;
+    let targetFrameRate = 60;
 
     const render = (now: number) => {
       animId = requestAnimationFrame(render);
-      const delta = Math.min((now - lastTime) / 1000, 0.1);
+      // Adaptive render cadence is based on measured work duration.
+      // It never blocks terminal input, graph filtering or event ingestion.
+      if (now - lastPresentedAt < (1000 / targetFrameRate) - 2) return;
+      lastPresentedAt = now;
+      const frameStart = performance.now();
+      const delta = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
+      const sqePhase = causalCore.tick(delta);
+      updateObservedRelations();
 
       const currentEnv = envRef.current;
       const t = (now * 0.0008 * currentEnv.speed) % 86400;
@@ -773,8 +819,10 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       if (currentEnv.topology === 'torus') {
         torusMat.color.lerp(targetCol, 0.08);
         torusMat.opacity = 0.55 * bloom;
-        torusMesh.rotation.x = t * 0.5;
-        torusMesh.rotation.y = t * 0.7;
+        // The existing torus retains its motion; actual command events create
+        // bounded impulses in a separately integrated symplectic oscillator.
+        torusMesh.rotation.x = t * 0.5 + sqePhase.q * 0.16;
+        torusMesh.rotation.y = t * 0.7 + sqePhase.p * 0.16;
         const scale = 1 + Math.sin(t * 3) * 0.06 + smoothedAudio * 0.35;
         torusMesh.scale.setScalar(scale);
       } else if (currentEnv.topology === 'tesseract') {
@@ -981,6 +1029,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       renderHudCanvas(now, currentEnv, combinedFreq, camera, vfsNodes, hoveredNodeId, ledState);
 
       renderer.render(scene, camera);
+      targetFrameRate = causalCore.sampleFrame(performance.now() - frameStart).fpsCap;
     };
 
     animId = requestAnimationFrame(render);
@@ -999,6 +1048,8 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       renderer.dispose();
       torusGeo.dispose();
       torusMat.dispose();
+      relationGeometry.dispose();
+      relationMaterial.dispose();
       pGeo.dispose();
       pMat.dispose();
       speechGeo.dispose();
