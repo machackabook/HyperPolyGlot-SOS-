@@ -1,10 +1,12 @@
 /**
- * QuineService - Compiles and exports the application as a 100% self-contained standalone HTML quine artifact
+ * QuineService - Exports an explicitly limited portable HTML quine snapshot.
+ * This file requires CDN JS/CSS to render and does NOT contain the full React frontend.
+ * Unsupported system commands fail closed; source reproduction uses real document bytes.
  */
 import { vfs } from './vfsService';
 
 export function generateQuineHtml(): string {
-  const vfsJson = JSON.stringify(JSON.parse(vfs.exportJson()));
+  const vfsJson = JSON.stringify(JSON.parse(vfs.exportJson())).replace(/</g, '\\u003c');
   const timestamp = new Date().toISOString();
 
   return `<!DOCTYPE html>
@@ -25,7 +27,7 @@ export function generateQuineHtml(): string {
   </style>
 </head>
 <body class="relative w-screen h-screen overflow-hidden select-none">
-  <!-- 100% Background Visual Renderer -->
+  <!-- Portable Three.js background. CDN dependency: network required. -->
   <div id="canvasViewport" class="fixed inset-0 w-full h-full z-0"></div>
 
   <!-- Sole UI: HyperTerminal -->
@@ -34,15 +36,15 @@ export function generateQuineHtml(): string {
       <div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
         <span class="font-bold text-white tracking-wider">HYPERTERMINAL POLYGLOT QUINE OS [STANDALONE QUINE]</span>
-        <span class="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300">100% OFFLINE</span>
+        <span class="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300">CDN REQUIRED</span>
       </div>
       <div class="flex items-center gap-2 text-[10px] text-slate-400">
         <span>STAMP: ${timestamp}</span>
       </div>
     </div>
     <div id="termStream" class="flex-1 p-3 overflow-y-auto space-y-1.5 text-xs font-mono">
-      <div class="text-cyan-400 font-bold">⚡ QUINE STANDALONE BOOTSTRAP COMPLETE</div>
-      <div class="text-slate-300">Self-replicating artifact verified. 100% visual renderer background active. Type 'help' or explore VFS.</div>
+      <div class="text-cyan-400 font-bold">⚡ QUINE PORTABLE SNAPSHOT LOADED</div>
+      <div class="text-slate-300">Portable subset with actual VFS reads and Torus WebGL. React frontend, authenticated mesh, and private Scribe are not bundled. CDN connection required.</div>
     </div>
     <form id="termForm" class="p-2.5 bg-black/75 border-t border-cyan-500/30 flex items-center gap-2">
       <span class="text-cyan-400 font-bold">root@quine $</span>
@@ -54,6 +56,7 @@ export function generateQuineHtml(): string {
   <script>
     const INITIAL_VFS = ${vfsJson};
     let currentCwd = '/root';
+    const rootDir = INITIAL_VFS && INITIAL_VFS.children && INITIAL_VFS.children.root;
 
     // 100% Background Three.js Renderer
     const container = document.getElementById('canvasViewport');
@@ -132,17 +135,41 @@ export function generateQuineHtml(): string {
       const parts = cmd.split(' ');
       const main = parts[0].toLowerCase();
       if (main === 'help') {
-        appendTerm('Commands: help, ls, cat <file>, render <torus|tesseract>, clear, quine, 963 on|off');
+        appendTerm('Portable snapshot commands: help, ls, cat <filename>, render torus, clear, quine. Other full React/host capabilities require the original HyperTerminal frontend and an authenticated backend.');
       } else if (main === 'clear') {
-        termStream.innerHTML = '';
+        termStream.textContent = '';
       } else if (main === 'ls') {
-        appendTerm('welcome.txt  notes.md  projects/  scripts/  mnt/');
+        if (!rootDir || rootDir.type !== 'directory' || !rootDir.children) {
+          appendTerm('VFS root not available in this snapshot.', 'text-red-400');
+        } else {
+          appendTerm(Object.entries(rootDir.children).map(([name, node]) => name + (node.type === 'directory' ? '/' : '')).join('  '));
+        }
+      } else if (main === 'cat') {
+        const filename = parts.slice(1).join(' ');
+        const file = rootDir && rootDir.children && rootDir.children[filename];
+        if (!filename || filename === '__proto__' || !Object.prototype.hasOwnProperty.call(rootDir?.children || {}, filename) || file.type !== 'file') {
+          appendTerm('Not found: only actual files under /root are readable.', 'text-red-400');
+        } else {
+          appendTerm(String(file.content ?? ''));
+        }
       } else if (main === 'render') {
-        appendTerm('Switched background visual rendering to: ' + (parts[1] || 'torus'));
+        if (!parts[1] || parts[1].toLowerCase() === 'torus') {
+          knot.visible = true;
+          appendTerm('Torus geometry is rendered in the local WebGL scene.');
+        } else {
+          appendTerm('Unsupported in this portable snapshot: ' + parts[1] + '. No topology was changed.', 'text-red-400');
+        }
       } else if (main === 'quine') {
-        appendTerm('Ouroboros self-replicating quine active. Size: ' + document.documentElement.outerHTML.length + ' bytes.');
+        const html = '<!doctype html>\n' + document.documentElement.outerHTML;
+        const blob = new Blob([html], { type: 'text/html' });
+        const href = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = href; link.download = 'HyperTerminal_Quine_Portable.html';
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(href), 1000);
+        appendTerm('Requested a reproducible portable HTML snapshot (' + new TextEncoder().encode(html).byteLength + ' bytes). Verify your download. External CDN resources are still required.');
       } else {
-        appendTerm('Executed ' + cmd + ' in standalone quine sandbox.');
+        appendTerm('Unsupported command in portable snapshot: ' + main + '. No host process or system action was performed.', 'text-red-400');
       }
     };
   <\/script>

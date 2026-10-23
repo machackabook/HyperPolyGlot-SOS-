@@ -907,7 +907,7 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   macro record <name>    : Record terminal command sequences
   macro stop | run <name>: Save or execute macro script
   macro alias <n> "<cmd>": Create persistent alias for command chain
-  quine export           : Export 100% standalone offline running HTML
+  quine export           : Export portable CDN-dependent HTML snapshot
 
 [OMNI-NEXUS OS KERNEL & RECOVERY ENGINE]
   links <url|file>       : Launch text-based browser for VFS & MHTML docs
@@ -1749,11 +1749,11 @@ Pool Liquidity: $54,820.50 USD   Stripe & Cash App Proxy Active`, 'table');
         const sub = (args[0] || 'export').toLowerCase();
         if (sub === 'export' || sub === 'download') {
           exportQuineFile();
-          appendLine('Compiled and exported self-contained Quine HTML file! Can run offline in any browser.', 'success', '♾️');
+          appendLine('Portable Quine snapshot download requested. It is a CDN-dependent functional subset (not a full offline React/mesh bundle). Check your browser downloads; review exported VFS data before sharing.', 'system', '♾️');
         } else {
           appendLine(`OUROBOROS QUINE ENGINE
-Self-contained Single-File HTML Artifact Generator.
-Current VFS, WebGL Shaders, and Terminal Engine are compiled into an immutable standalone quine.`, 'output');
+Portable Single-File HTML snapshot (network-dependent CDN rendering).
+A readable VFS subset, Three.js torus and actual HTML re-export are included. Full React frontend, native mesh and private Scribe are not bundled.`, 'output');
         }
         break;
       }
@@ -3813,7 +3813,7 @@ Last Compacted    : ${new Date(tel.lastCompactedAt).toLocaleTimeString()}`, 'tab
               <button
                 onClick={exportQuineFile}
                 className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
-                title="Export Standalone Offline Quine HTML"
+                title="Export portable Quine HTML snapshot (requires CDN)"
               >
                 <Download className="w-3 h-3 text-amber-400" />
                 <span>QUINE</span>
