@@ -13,7 +13,7 @@ import {createEngramFabric} from '../src/services/gaiaEngramCore.mjs';
 
 const ALLOWED=new Set(['.md','.txt','.json','.jsonl']);
 const unsafeName=/(^|[._-])(secret|password|credentials|apikey|api-key|private-key|token|\.env|id_rsa)([._-]|$)/i;
-const sensitiveContent=/(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{20,}\b|\bgh[pousr]_[A-Za-z0-9_]{20,}\b|\bAIza[0-9A-Za-z_-]{30,}\b)/;
+const sensitiveContent=/(-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{20,}\b|\bgh[pousr]_[A-Za-z0-9_]{20,}\b|\bAIza[0-9A-Za-z_-]{30,}\b|["']?(?:api[_-]?key|password|client_secret|refresh_token|access_token|private_key)["']?\s*:\s*["'][^"']{6,})/i;
 const sha=data=>createHash('sha256').update(data).digest('hex');
 const json=res=>(res.writeHead(200,{'content-type':'application/json; charset=utf-8',
   'cache-control':'no-store','x-content-type-options':'nosniff'}),res);
@@ -70,7 +70,11 @@ async function run(){
   try{
     const saved=JSON.parse(await readFile(dbFile,'utf8'));
     if(!Array.isArray(saved))throw new Error('Invalid snapshot');
-    for(const record of saved)fabric.ingest(record);
+    for(const record of saved){
+      if(typeof record.content!=='string'||sha(Buffer.from(record.content,'utf8'))!==record.contentHash)
+        throw new Error('Persisted engram content hash mismatch');
+    }
+    fabric.restoreRecords(saved);
   }catch(e){if(e.code!=='ENOENT')throw new Error('Cannot recover memory snapshot: '+e.message)}
   let scanCount=0,lastScan=null,lastError=null,skippedSensitive=0,changed=0,inFlight=false;
   async function scan(){
