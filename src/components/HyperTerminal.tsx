@@ -655,6 +655,23 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
     appendLine(`Querying Gemini Interactive Core: "${trimmed}"...`, 'ai', '✨');
 
     try {
+      // Auto-steer memory recall on AI queries only after existing mesh authorization.
+      // Bounded wait means a slow/offline Scribe does not hold up the AI request.
+      let retrievedContext = '';
+      if (quineMeshService.status().state === 'connected') {
+        const budget = new Promise<null>(resolve => setTimeout(() => resolve(null), 150));
+        const search = quineMeshService.scribeSearch(trimmed.slice(0,256),3).catch(() => null);
+        const data: any = await Promise.race([search, budget]);
+        if (data && Array.isArray(data.results)) {
+          retrievedContext = data.results.slice(0,3)
+            .filter((e:any)=>typeof e.snippet==='string'&&typeof e.source_ref==='string')
+            .map((e:any)=>'[SOURCE '+String(e.source_id||'unknown').slice(0,96)+
+              '] ref='+String(e.source_ref).slice(0,260)+
+              ' SHA256='+String(e.sha256||'not-supplied').slice(0,64)+
+              '\n'+e.snippet.slice(0,600)).join('\n\n');
+        }
+      }
+      const combinedMemoryContext=[engramsMarkdown,retrievedContext].filter(Boolean).join('\n\n').slice(0,3500);
       const resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -667,7 +684,7 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
             topology: envState.topology,
             sentiment: envState.sentiment,
           },
-          engramsContext: engramsMarkdown,
+          engramsContext: combinedMemoryContext,
         }),
       });
 
