@@ -58,6 +58,7 @@ import { primeCompressor } from '../services/primeMathCompressor';
 import { iterationStateService } from '../services/iterationStateService';
 import { pipelineEngine } from '../services/pipelineEngine';
 import { causalCore, routeCapability } from '../services/causalCore.mjs';
+import { axsResourceGovernor, octaveTrace } from '../services/axsResourceGovernor.mjs';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
@@ -83,7 +84,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs'
 ];
 
 export interface SentimentVisualConfig {
@@ -765,6 +766,17 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
     }
 
     switch (cmd) {
+      case 'axs': {
+        const sub=(args[0]||'status').toLowerCase();
+        if(sub==='status'){
+          appendLine(JSON.stringify({scope:'THIS_BROWSER_TAB_ONLY',...axsResourceGovernor.status(),remoteOsThreads:'not-connected',modelAllocations:'not-connected'},null,2),'system');
+        }else if(sub==='octave'){
+          const t=Number(args[1]??0);
+          try{appendLine(JSON.stringify({parameter:t,coordinate:octaveTrace(t),kind:'exact-geometric-transform-not-telemetry'},null,2),'output');}
+          catch(err:any){appendLine(String(err?.message||err),'error');}
+        }else appendLine('axs status | axs octave <radians> — measured renderer budget and exact curve (no OS-process claims)','system');
+        break;
+      }
       case 'core': {
         const op = (args[0] || 'status').toLowerCase();
         if (op === 'status') {
@@ -802,6 +814,10 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   find <query>           : Search files and directory nodes
   grep <pattern> <file>  : Search text inside file or all VFS
   vfs export | reset     : Export VFS to JSON or reset to defaults
+
+[AXS BROWSER RESOURCE GOVERNOR]
+  axs status              : Measured renderer cost, adaptive point budget, DPR and observed cadence
+  axs octave <radians>    : Exact Fourier trace coordinates (not device telemetry)
 
 [GAIA CAUSAL INVARIANT CORE]
   core status             : Real browser-local event and SQE state

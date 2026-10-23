@@ -8,6 +8,7 @@ import { geoNexusService, GeoTelemetry } from '../services/geoNexusService';
 import { EarthNasaOverlay } from './EarthNasaOverlay';
 import { computeRgbLedState } from '../services/colorProfileService';
 import { causalCore } from '../services/causalCore.mjs';
+import { axsResourceGovernor, octaveTrace } from '../services/axsResourceGovernor.mjs';
 import { useState } from 'react';
 
 interface VisualRenderer3DProps {
@@ -106,6 +107,16 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     });
     const torusMesh = new THREE.Mesh(torusGeo, torusMat);
     topologiesGroup.add(torusMesh);
+
+    // Exact mathematical octave trace: decorative geometry, no generated OS/physics telemetry.
+    const tracePoints = Array.from({length:257}, (_,i) => {
+      const {x,y}=octaveTrace(i*Math.PI*2/256);
+      return new THREE.Vector3(x*13,y*13,-46);
+    });
+    const octaveGeometry=new THREE.BufferGeometry().setFromPoints(tracePoints);
+    const octaveMaterial=new THREE.LineBasicMaterial({color:0xffcc00,transparent:true,opacity:0.54,depthWrite:false});
+    const octavePath=new THREE.Line(octaveGeometry,octaveMaterial);
+    topologiesGroup.add(octavePath);
 
     // Real relation geometry: no links are drawn until the terminal observes events.
     // Coordinates are deterministic display positions, NOT physical-device locations.
@@ -439,6 +450,9 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     });
     const particleField = new THREE.Points(pGeo, pMat);
     scene.add(particleField);
+    let activeParticleCount = PARTICLE_COUNT;
+    let activePixelRatio = isHeadless ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    pGeo.setDrawRange(0, activeParticleCount);
 
     // =========================================================================
     // 3D VOID FREQUENCY WAVEFORM MATRIX & AUDIO SPECTRUM HORIZON RIBBON
@@ -663,6 +677,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     let lastSpokenText = '';
     let lastPresentedAt = 0;
     let targetFrameRate = 60;
+    axsResourceGovernor.reset();
 
     const render = (now: number) => {
       animId = requestAnimationFrame(render);
@@ -977,7 +992,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       const grav = currentEnv.gravity;
       const turb = currentEnv.turbulence;
 
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
+      for (let i = 0; i < activeParticleCount; i++) {
         const d = pBase[i];
         const angle = d.theta + t * 0.2 * d.speed * grav;
         const wave = Math.sin(d.phi * 5 + t * 2 + d.waveOffset) * 10 * turb;
@@ -1029,7 +1044,19 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       renderHudCanvas(now, currentEnv, combinedFreq, camera, vfsNodes, hoveredNodeId, ledState);
 
       renderer.render(scene, camera);
-      targetFrameRate = causalCore.sampleFrame(performance.now() - frameStart).fpsCap;
+      const actualRenderWorkMs=performance.now()-frameStart;
+      causalCore.sampleFrame(actualRenderWorkMs); // preserve existing SQE/core diagnostics
+      const axsBudget=axsResourceGovernor.observe(actualRenderWorkMs,now);
+      targetFrameRate=axsBudget.fpsCap;
+      if(axsBudget.particleCount!==activeParticleCount){
+        activeParticleCount=axsBudget.particleCount;
+        pGeo.setDrawRange(0,activeParticleCount);
+      }
+      const requestedDpr=isHeadless?1:Math.min(window.devicePixelRatio||1,axsBudget.pixelRatioCap);
+      if(requestedDpr!==activePixelRatio){
+        activePixelRatio=requestedDpr;
+        renderer.setPixelRatio(activePixelRatio);
+      }
     };
 
     animId = requestAnimationFrame(render);
@@ -1048,6 +1075,8 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       renderer.dispose();
       torusGeo.dispose();
       torusMat.dispose();
+      octaveGeometry.dispose();
+      octaveMaterial.dispose();
       relationGeometry.dispose();
       relationMaterial.dispose();
       pGeo.dispose();

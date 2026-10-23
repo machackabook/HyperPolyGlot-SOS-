@@ -52,3 +52,14 @@ Live Cloudflare Browser Rendering smoke: the app and terminal rendered on GitHub
 6. Updating the AI Studio v3 archive to incorporate the upstream changes; the canonical GitHub `main` app currently differs from the user-provided v3 ZIP.
 
 **Rule:** No mock telemetry, fake SSH/network success, or fabricated approvals can count as ADAM production proof.
+
+
+## AXS live browser rendering budget (Oct 2026)
+
+The AXS 6K reference design's generated PIDs, random process loads, Hugging Face model labels, 6,000 decorative particles, fixed heap/sync/FPS fields, and randomized messages are **not evidence of operating-system processes or synchronized workers**. None are used for authorization or remote telemetry.
+
+`src/services/axsResourceGovernor.mjs` tracks actual observed JavaScript/WebGL frame-submission work. Its bounded rolling p90 estimator and hysteresis select a **local display-only budget**: 60/30/20 FPS target, 100%/60%/30% of existing decorative Three.js points, and DPR caps 2/1.5/1. The renderer calls `BufferGeometry.setDrawRange` and updates only the active point range; it retains React input, accessibility, and event ingestion without throttling. The governor cannot directly control OS CPU/GPU scheduling or measure GPU execution.
+
+`octaveTrace(t)` implements the user's precise four-harmonic x/y equations, rendered as an actual Three.js line behind the existing torus. It is geometry, not a physical wave solver, spectrum measurement or proof of quantum behavior.
+
+Terminal: `axs status`, `axs octave <radians>`. Browser measurements are unavailable until actual render samples arrive. Native process/thread telemetry or authenticated Hugging Face inference remain disconnected until verified backends exist. Run `node --test tests/axs-resource-governor.test.mjs` and `node --test tests/causal-core.test.mjs`; testing does not by itself establish hardware production readiness.
