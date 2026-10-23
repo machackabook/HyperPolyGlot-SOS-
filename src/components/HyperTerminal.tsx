@@ -58,6 +58,7 @@ import { primeCompressor } from '../services/primeMathCompressor';
 import { iterationStateService } from '../services/iterationStateService';
 import { pipelineEngine } from '../services/pipelineEngine';
 import { causalCore, routeCapability } from '../services/causalCore.mjs';
+import { quineMeshService } from '../services/quineMeshService.mjs';
 import { axsResourceGovernor, octaveTrace } from '../services/axsResourceGovernor.mjs';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
@@ -84,7 +85,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe'
 ];
 
 export interface SentimentVisualConfig {
@@ -766,6 +767,35 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
     }
 
     switch (cmd) {
+      case 'mesh': {
+        const op=(args[0]||'status').toLowerCase();
+        if(op==='status'){appendLine(JSON.stringify(quineMeshService.status(),null,2),'output');}
+        else if(op==='connect'||op==='pair'){
+          const token=window.prompt('Pair with THIS DEVICE localhost bridge 127.0.0.1:8791. Enter its secret; it is not echoed to command history:');
+          if(!token){appendLine('Pairing cancelled. No host attached.','system');break;}
+          try { const paired=await quineMeshService.connect(token.trim());
+            appendLine(JSON.stringify({state:paired.state,source:paired.source,host:paired.host},null,2),'success');
+          } catch(e:any){appendLine('Pairing failed: '+String(e?.message||e),'error');}
+        } else if(op==='ping'){
+          try { const p=await quineMeshService.ping();
+            appendLine(JSON.stringify({source:'measured-local-ws-roundtrip',...p},null,2),'output');
+          }catch(e:any){appendLine(String(e?.message||e),'error');}
+        } else if(op==='disconnect'){quineMeshService.disconnect();appendLine('Loopback bridge detached.','system');}
+        else appendLine('mesh status | mesh connect | mesh ping | mesh disconnect','system');
+        break;
+      }
+      case 'scribe': {
+        const op=(args[0]||'status').toLowerCase();
+        try {
+          if(op==='status')appendLine(JSON.stringify(await quineMeshService.scribeStatus(),null,2),'output');
+          else if(op==='search'){
+            const q=args.slice(1).join(' ');
+            if(!q){appendLine('scribe search <terms> requires Scribe v4 at 127.0.0.1:8787 and a paired mesh.','system');break;}
+            appendLine(JSON.stringify(await quineMeshService.scribeSearch(q),null,2),'output');
+          } else appendLine('scribe status | scribe search <terms>','system');
+        } catch(e:any){appendLine('Scribe not connected: '+String(e?.message||e),'error');}
+        break;
+      }
       case 'axs': {
         const sub=(args[0]||'status').toLowerCase();
         if(sub==='status'){
@@ -814,6 +844,13 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   find <query>           : Search files and directory nodes
   grep <pattern> <file>  : Search text inside file or all VFS
   vfs export | reset     : Export VFS to JSON or reset to defaults
+
+[QUINE LOCALHOST MESH / PRIVATE SCRIBE]
+  mesh connect             : Pair read-only localhost bridge via secure separate prompt
+  mesh status | ping       : Verified host status or measured WebSocket roundtrip
+  mesh disconnect          : Detach bridge (no host processes changed)
+  scribe status            : Probe actual local Scribe v4 server
+  scribe search <terms>    : Read cited local archive results after pairing
 
 [AXS BROWSER RESOURCE GOVERNOR]
   axs status              : Measured renderer cost, adaptive point budget, DPR and observed cadence
