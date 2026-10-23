@@ -82,3 +82,19 @@ test('readback/export does not leak mutable internal arrays',()=>{
   const outside=f.get('herald:entry');outside.references.push('herald:fake');
   assert.deepEqual(f.get('herald:entry').references,['herald:other']);
 });
+
+test('durable snapshot rehydrates original revision number and content',()=>{
+  const f=createEngramFabric({allowedSources:['herald']});
+  f.ingest(a());
+  f.ingest(a({content:'revised',contentHash:'b'.repeat(64)}));
+  const snapshot=f.exportRecords();
+  const restored=createEngramFabric({allowedSources:['herald']});
+  assert.equal(restored.restoreRecords(snapshot).restored,1);
+  assert.equal(restored.get('herald:entry').version,2);
+  assert.equal(restored.ingest(a({content:'revised',contentHash:'b'.repeat(64)})).status,'unchanged');
+});
+test('tampered source scope and invalid revisions cannot be restored',()=>{
+  const f=createEngramFabric({allowedSources:['herald']});
+  assert.throws(()=>f.restoreRecords([{...a(),version:0}]),/revision/);
+  assert.throws(()=>f.restoreRecords([{...a({sourceId:'unauthorized:bad'}),version:1}]),/Unauthorized/);
+});
