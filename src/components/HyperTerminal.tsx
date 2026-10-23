@@ -57,6 +57,7 @@ import { sparsebundleService } from '../services/sparsebundleService';
 import { primeCompressor } from '../services/primeMathCompressor';
 import { iterationStateService } from '../services/iterationStateService';
 import { pipelineEngine } from '../services/pipelineEngine';
+import { causalCore, routeCapability } from '../services/causalCore.mjs';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
 import { TerminalSyntaxInput } from './TerminalSyntaxInput';
@@ -82,7 +83,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core'
 ];
 
 export interface SentimentVisualConfig {
@@ -631,6 +632,13 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
       const durationMs = Math.round(performance.now() - startTime);
       const parts = raw.split(/\s+/);
       const cmdName = parts[0].toLowerCase();
+      // Actual observed user input, limited to the command NAME (never args, prompts or credentials).
+      // The event is processed locally and does not request human approval.
+      try {
+        causalCore.observe({a:'terminal',b:'exec',c:cmdName.replace(/[^a-z0-9_.:/-]/g,'_').slice(0,96)||'unknown',source:'hyperterminal'});
+      } catch (eventError) {
+        console.warn('Causal event rejected', eventError);
+      }
       let category = 'SYS';
       if (['render', 'topology', 'color', 'gravity', 'speed', 'turbulence', 'burst', 'calm', 'shatter'].includes(cmdName)) category = '3D';
       else if (['gemini', 'ai', 'ask', 'voice', 'speak', 'mic', 'listen', '963'].includes(cmdName)) category = 'AI';
@@ -742,7 +750,39 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
     const argStr = args.join(' ');
     const cwd = activeInstance.cwd;
 
+    // Authority checks are deliberately limited to privileged operations.
+    // Local math, graph calculation, VFS browsing and rendering never await approval.
+    const privilegedOperation =
+      cmd === 'git' && /^(push|commit|reset)$/.test(args[0] || '') ? 'source-write' :
+      cmd === 'ssh' && /^(exec|run)$/.test(args[0] || '') ? 'remote-execute' :
+      cmd === 'openwrt' && /^(flash|write|apply)$/.test(args[0] || '') ? 'network-admin' :
+      cmd === 'gateway' && /^(set|write|reset)$/.test(args[0] || '') ? 'network-admin' :
+      null;
+    if (privilegedOperation) {
+      const policy = routeCapability(privilegedOperation);
+      appendLine('[CAUSAL CORE] ' + policy.reason + '. This browser cannot authorize privileged host changes.', 'error');
+      return;
+    }
+
     switch (cmd) {
+      case 'core': {
+        const op = (args[0] || 'status').toLowerCase();
+        if (op === 'status') {
+          appendLine(JSON.stringify({...causalCore.status(), path:'fast', surface:'browser-only'}, null, 2), 'system');
+        } else if (op === 'phase') {
+          appendLine(JSON.stringify(causalCore.phase(), null, 2), 'output');
+        } else if (op === 'graph' || op === 'matrix') {
+          appendLine(JSON.stringify(causalCore.graph(), null, 2), 'output');
+        } else if (op === 'history') {
+          appendLine(JSON.stringify(causalCore.history().slice(-20), null, 2), 'output');
+        } else if (op === 'policy') {
+          const name = args[1] || 'compute';
+          appendLine(JSON.stringify({operation:name,...routeCapability(name)}, null, 2), 'system');
+        } else {
+          appendLine('core status | phase | graph | matrix | history | policy <operation>', 'system');
+        }
+        break;
+      }
       case 'help':
       case '?': {
         appendLine(
@@ -762,6 +802,13 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   find <query>           : Search files and directory nodes
   grep <pattern> <file>  : Search text inside file or all VFS
   vfs export | reset     : Export VFS to JSON or reset to defaults
+
+[GAIA CAUSAL INVARIANT CORE]
+  core status             : Real browser-local event and SQE state
+  core graph              : Observed ternary sparse graph (count / frequency)
+  core phase              : Numerical symplectic state
+  core policy <operation> : Fast path or scoped authorization requirements
+  core history            : Recent command-type events only; no raw input
 
 [POLYMORPHIC NEURALITY & 3D VISUAL RENDERER]
   render <topology>      : Switch geometry (torus, tesseract, singularity, neural, galaxy, spindle, dna)
