@@ -774,24 +774,25 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
           const token=window.prompt('Pair with THIS DEVICE localhost bridge 127.0.0.1:8791. Enter its secret; it is not echoed to command history:');
           if(!token){appendLine('Pairing cancelled. No host attached.','system');break;}
           try { const paired=await quineMeshService.connect(token.trim());
+            try{causalCore.observe({a:'mesh',b:'localhost',c:'authenticated',source:'hyperterminal'})}catch{}
             appendLine(JSON.stringify({state:paired.state,source:paired.source,host:paired.host},null,2),'success');
           } catch(e:any){appendLine('Pairing failed: '+String(e?.message||e),'error');}
         } else if(op==='ping'){
           try { const p=await quineMeshService.ping();
             appendLine(JSON.stringify({source:'measured-local-ws-roundtrip',...p},null,2),'output');
           }catch(e:any){appendLine(String(e?.message||e),'error');}
-        } else if(op==='disconnect'){quineMeshService.disconnect();appendLine('Loopback bridge detached.','system');}
+        } else if(op==='disconnect'){quineMeshService.disconnect();try{causalCore.observe({a:'mesh',b:'localhost',c:'detached',source:'hyperterminal'})}catch{}appendLine('Loopback bridge detached.','system');}
         else appendLine('mesh status | mesh connect | mesh ping | mesh disconnect','system');
         break;
       }
       case 'scribe': {
         const op=(args[0]||'status').toLowerCase();
         try {
-          if(op==='status')appendLine(JSON.stringify(await quineMeshService.scribeStatus(),null,2),'output');
+          if(op==='status'){const d=await quineMeshService.scribeStatus();try{causalCore.observe({a:'scribe',b:'localhost',c:'ready',source:'hyperterminal'})}catch{}appendLine(JSON.stringify(d,null,2),'output');}
           else if(op==='search'){
             const q=args.slice(1).join(' ');
             if(!q){appendLine('scribe search <terms> requires Scribe v4 at 127.0.0.1:8787 and a paired mesh.','system');break;}
-            appendLine(JSON.stringify(await quineMeshService.scribeSearch(q),null,2),'output');
+            const d=await quineMeshService.scribeSearch(q);try{causalCore.observe({a:'scribe',b:'search',c:'returned',source:'hyperterminal'})}catch{}appendLine(JSON.stringify(d,null,2),'output');
           } else appendLine('scribe status | scribe search <terms>','system');
         } catch(e:any){appendLine('Scribe not connected: '+String(e?.message||e),'error');}
         break;
