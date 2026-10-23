@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
+import { ResonanceConsole } from './components/ResonanceConsole';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
 import { EnvironmentState } from './types';
 import { DEFAULT_RGB_LED_CONFIG } from './services/colorProfileService';
@@ -66,6 +67,9 @@ export function App() {
 
       {/* The Sole UI: Sovereign HyperTerminal */}
       <HyperTerminal envState={envState} setEnvState={setEnvState} />
+
+      {/* Explicit opt-in mathematical field console; original HyperTerminal stays intact. */}
+      <ResonanceConsole />
     </div>
   );
 }
