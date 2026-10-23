@@ -160,7 +160,7 @@ export function generateQuineHtml(): string {
           appendTerm('Unsupported in this portable snapshot: ' + parts[1] + '. No topology was changed.', 'text-red-400');
         }
       } else if (main === 'quine') {
-        const html = '<!doctype html>\n' + document.documentElement.outerHTML;
+        const html = '<!doctype html>' + document.documentElement.outerHTML;
         const blob = new Blob([html], { type: 'text/html' });
         const href = URL.createObjectURL(blob);
         const link = document.createElement('a');
