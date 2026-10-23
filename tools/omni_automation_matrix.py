@@ -147,7 +147,7 @@ class UnifiedTelemetryOptimizer:
 class OmniAutomationMatrix:
     """User-authorized browser handoff, never system-wide macros or extension injection."""
     @staticmethod
-    async def deliver_to_browser(url,payload,allow_origin=None):
+    async def deliver_to_browser(url,payload,allow_origin=None,screenshot_path=None):
         u=urlsplit(url)
         if u.scheme not in ('http','https') or not u.hostname:raise ValueError('invalid browser URL')
         origin=u.scheme+'://'+u.netloc
@@ -168,7 +168,9 @@ class OmniAutomationMatrix:
                 ack=await page.evaluate('(data)=>window.__GAIA_RESONANCE__.ingest(data)',payload)
                 if not isinstance(ack,dict) or ack.get('accepted') is not True or not ack.get('receipt'):
                     raise RuntimeError('browser receiver did not acknowledge payload')
-                return {'accepted':True,'scope':'in-page only, no backend persistence', 'receipt':ack['receipt'],'origin':origin}
+                if screenshot_path:
+                    await page.screenshot(path=str(screenshot_path),full_page=True)
+                return {'accepted':True,'scope':'in-page only, no backend persistence', 'receipt':ack['receipt'],'origin':origin,'screenshot':str(screenshot_path) if screenshot_path else None}
             finally:await browser.close()
 
 
@@ -179,12 +181,13 @@ def main():
     a.add_argument('--report')
     a.add_argument('--browser-url')
     a.add_argument('--allow-origin')
+    a.add_argument('--screenshot',help='Save browser-rendered receipt as a PNG after acknowledgement')
     args=a.parse_args()
     report=UnifiedTelemetryOptimizer().optimize(read_dataset(args.input),args.iterations)
     print(json.dumps(report,indent=2))
     if args.report:Path(args.report).write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     if args.browser_url:
-        print(json.dumps({'browser_handoff':asyncio.run(OmniAutomationMatrix.deliver_to_browser(args.browser_url,report,args.allow_origin))},indent=2))
+        print(json.dumps({'browser_handoff':asyncio.run(OmniAutomationMatrix.deliver_to_browser(args.browser_url,report,args.allow_origin,args.screenshot))},indent=2))
 
 
 if __name__=='__main__':main()
