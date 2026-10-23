@@ -19,13 +19,9 @@ function unique(items) {
 export function routeCapability(operation, authorization = null) {
   if (FAST.has(operation)) return {route:'fast',authorized:true,reason:'No privileged side effect'};
   if (!PRIVILEGED.has(operation)) return {route:'blocked',authorized:false,reason:'Unknown operation'};
-  // A browser-side grant never establishes permission for a remote/device operation.
-  if (!authorization || authorization.verifiedBy !== 'trusted-backend' || authorization.operation !== operation ||
-      !finite(authorization.expiresAt) || authorization.expiresAt <= Date.now() ||
-      typeof authorization.scope !== 'string' || !authorization.scope) {
-    return {route:'gated',authorized:false,reason:'Require backend-verified scoped capability'};
-  }
-  return {route:'gated',authorized:true,reason:'Scoped grant presented; backend must verify again before execution'};
+  // No browser-provided object is authoritative. A backend must independently
+  // verify authorization and execute privileged operations (not this module).
+  return {route:'gated',authorized:false,reason:'Requires authenticated scoped backend; browser cannot authorize'};
 }
 export function inducedSteeredGraph({vertices, relations, protectedVertices = [], scores = {}, limit = 64, embeddings = null}) {
   const all = unique(vertices);
@@ -96,6 +92,7 @@ export function createCausalCore({maxEvents=256, vertexBudget=48} = {}) {
         observedAt:new Date().toISOString()};
       events.push(event); if(events.length>maxEvents) events.shift();
       phase.p = Math.min(2,phase.p+0.06); // bounded graphical impulse, not device telemetry
+      phase.energy=0.5*(phase.q*phase.q+phase.p*phase.p);
       for(const listener of listeners) { try{listener(event)}catch(e){console.error('Core subscriber failed',e)} }
       return event.seq;
     },
