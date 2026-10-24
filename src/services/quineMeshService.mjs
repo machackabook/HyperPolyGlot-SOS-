@@ -109,14 +109,15 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw new RangeError('History limit 1-100');
   return read('/v1/xai/card/history','?sessionId='+encodeURIComponent(sessionId)+'&limit='+limit);
  }
- function xaiCardChat(message,videoId,sessionId=null){
+ function xaiCardChat(message,videoId,sessionId=null,provider='xai'){
+  if(!['xai','gemini'].includes(provider))throw new TypeError('Unknown AI provider');
   if(typeof message!=='string'||!message.trim()||message.length>2400)
    throw new TypeError('Prompt must contain 1-2400 characters');
   if(typeof videoId!=='string'||!/^[A-Za-z0-9_-]{11}$/.test(videoId))
    throw new TypeError('Valid YouTube video ID required');
   if(sessionId!==null&&(typeof sessionId!=='string'||!/^[a-f0-9-]{36}$/i.test(sessionId)))
    throw new TypeError('Invalid card session UUID');
-  const body={message:message.trim(),videoId};
+  const body={message:message.trim(),videoId,provider};
   if(sessionId)body.sessionId=sessionId;
   return writeMount('/v1/xai/card/chat',body);
  }
