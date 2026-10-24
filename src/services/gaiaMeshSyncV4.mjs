@@ -40,6 +40,9 @@ const core=[
  ['nexus.localai','adapter','Ollama Runtime','bridge/gaia_local_ai.py'],
  ['nexus.sensor','adapter','PLLM Sensor Agent','src/services/pllmSensorAgent.mjs'],
  ['nexus.neutronality','core','Neutronality V15','src/services/gaiaNeutronalityV15.mjs'],
+ ['nexus.god','core','GOD Network Capability Gate','bridge/god_network_gate.py'],
+ ['nexus.forge','adapter','Golden Army Forge / Singularity','bridge/golden_army_forge.py'],
+ ['nexus.terrasphere','adapter','TerraSphere Location Observation','src/services/geoNexusService.ts'],
 ].map(([id,kind,title,path])=>({id,kind,title,sourceRef:ROOT+path,status:'declared'}));
 const connections=[
  ['nexus.scribe','nexus.memory','feeds'],
@@ -54,7 +57,13 @@ const connections=[
  ['nexus.sensor','nexus.neutronality','feeds'],
  ['nexus.neutronality','nexus.memory','feeds'],
  ['nexus.neutronality','nexus.canvas','renders'],
- ['nexus.neutronality','nexus.sqe','validates']
+ ['nexus.neutronality','nexus.sqe','validates'],
+ ['nexus.terrasphere','nexus.god','references'],
+ ['nexus.god','nexus.forge','validates'],
+ ['nexus.forge','nexus.sqe','computes'],
+ ['nexus.forge','nexus.memory','recalls'],
+ ['nexus.forge','nexus.mcp','routes'],
+ ['nexus.forge','nexus.canvas','renders']
 ].map(([from,to,type])=>({from,to,type}));
 export function createMeshRegistry(){
  let revision=0;
