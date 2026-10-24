@@ -1,3 +1,4 @@
+import publicWorker from '../src/cloudflare-public-worker.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -109,4 +110,25 @@ test('CORS preflight uses a valid bodyless 204 and strict origins',async()=>{
 test('unknown API paths are not open proxies',async()=>{
  const r=await request('/api/crossvoid/proxy?url=https://attacker.example');
  assert.equal(r.status,404);
+});
+
+test('public Cryptic Worker exposes explicit missing-assets diagnostics, not 502',async()=>{
+ const r=await publicWorker.fetch(new Request(BASE+'/',{method:'GET'}),{});
+ assert.equal(r.status,503);
+ assert.equal((await r.json()).error,'STATIC_ASSETS_NOT_CONFIGURED');
+});
+test('Cryptic public host forwards CrossVoid status but never fabricates authentication',async()=>{
+ const r=await publicWorker.fetch(new Request(BASE+'/api/crossvoid/status'),{});
+ assert.equal(r.status,200);
+ assert.equal((await r.json()).operatorAccess,'requires-verified-Cloudflare-Access-JWT');
+ const p=await publicWorker.fetch(new Request(BASE+'/api/crossvoid/operator/events/summary'),{});
+ assert.equal(p.status,401);
+});
+test('Cryptic public host forwards visitor events and rejects unconfigured storage',async()=>{
+ const r=await publicWorker.fetch(new Request(BASE+'/api/portal/event',{
+   method:'POST',headers:{origin:'https://crypticnews.org','content-type':'text/plain'},
+   body:JSON.stringify({stage:'surface',event:'open',source:'crypticnews'})
+ }),{});
+ assert.equal(r.status,503);
+ assert.equal((await r.json()).recorded,false);
 });
