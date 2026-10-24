@@ -3,6 +3,7 @@
 import argparse, asyncio, hmac, json, os, platform, secrets, time, shutil
 from gaia_gh_mounts import list_mounts, link_website, clone_repo
 from xai_card_store import XaiCardStore, ProviderUnavailable
+from gaia_native_runtime import GAIARuntime, GAIA_TOOLS, comms_status
 from datetime import datetime, timezone
 from aiohttp import ClientSession, ClientTimeout, web
 
@@ -51,12 +52,13 @@ def create_app(token,scribe_port=8787):
   return response
  app=web.Application(middlewares=[protect],client_max_size=4096)
  xai_cards=XaiCardStore()
+ native_runtime=GAIARuntime(workers=2)
  def status_data():
   return {'protocol':'quine-mesh-v1','status':'attached-localhost','source':'python-process-observed',
    'node_session':session,'os':platform.system(),'python':platform.python_version(),
    'process_id':os.getpid(),'uptime_seconds':round(time.monotonic()-started,3),
    'observed_at':datetime.now(timezone.utc).isoformat(),
-   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link','xai-card-status','xai-card-chat','xai-card-history'],
+   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link','xai-card-status','xai-card-chat','xai-card-history','gaia-runtime-status','gaia-compute-jobs','gaia-mcp-adapter'],
    'remote_execution':False,'device_control':False,'privileged_authority':False,
    'gh_installed':bool(shutil.which('gh')),
    'capability_authorization':'paired-localhost-user-command-only'}
@@ -130,6 +132,41 @@ def create_app(token,scribe_port=8787):
    # Never print or return exception details from the provider: may contain keys.
    raise web.HTTPBadGateway(text='Real AI provider request failed')
 
+ async def runtime_status(req):
+  return web.json_response(native_runtime.status())
+ async def runtime_submit(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'kind','payload'}:
+    raise ValueError('Expected a bounded computation')
+   result=native_runtime.submit(d.get('kind'),d.get('payload') or {})
+   return web.json_response(result,status=202)
+  except (ValueError,TypeError):
+   raise web.HTTPBadRequest(text='Invalid or unsupported bounded computation')
+  except RuntimeError:
+   raise web.HTTPServiceUnavailable(text='Local worker capacity exhausted')
+ async def runtime_result(req):
+  try:
+   result=native_runtime.result(req.match_info['job_id'])
+   return web.json_response(result)
+  except (ValueError,LookupError):
+   raise web.HTTPNotFound(text='Unknown local job')
+ async def mcp_catalog(req):
+  # Same tool implementations offered separately by the actual MCP SDK server.
+  # This response is a truthful authenticated local adapter, not an initialized MCP session.
+  return web.json_response({'status':'local-adapter','mcp_stdio_server':'bridge/gaia_mcp_server.py',
+    'initialized_mcp_stdio':False,'tools':GAIA_TOOLS})
+ async def mcp_call(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'name'}:
+    raise ValueError('Only tool name allowed on read-only local adapter')
+   if d.get('name')=='gaia_runtime_status':result=native_runtime.status()
+   elif d.get('name')=='gaia_comms_status':result=comms_status()
+   else:raise ValueError('Use swarm submit/result for bounded computational writes')
+   return web.json_response({'source':'local-adapter','tool':d['name'],'result':result})
+  except (ValueError,TypeError):
+   raise web.HTTPBadRequest(text='Unknown local read-only tool')
  async def ws_handler(req):
   ws=web.WebSocketResponse(protocols=('quine-mesh-v1',),max_msg_size=2048,heartbeat=30)
   await ws.prepare(req);await ws.send_json({'type':'attached','status':status_data()})
@@ -159,6 +196,11 @@ def create_app(token,scribe_port=8787):
  app.router.add_get('/v1/mounts',mount_list)
  app.router.add_post('/v1/mounts/clone',mount_clone)
  app.router.add_post('/v1/mounts/link',mount_link)
+ app.router.add_get('/v1/runtime/status',runtime_status)
+ app.router.add_post('/v1/runtime/jobs',runtime_submit)
+ app.router.add_get('/v1/runtime/jobs/{job_id}',runtime_result)
+ app.router.add_get('/v1/mcp/catalog',mcp_catalog)
+ app.router.add_post('/v1/mcp/adapter/call',mcp_call)
  app.router.add_get('/v1/ws',ws_handler)
  return app
 def main():
