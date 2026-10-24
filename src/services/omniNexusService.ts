@@ -128,7 +128,7 @@ class OmniNexusService {
     try {
       vfs.readFile('/root', '.gitconfig');
     } catch {
-      vfs.writeFile('/root', '.gitconfig', '[user]\n  name = Sovereign Operator\n  email = machackabook@gmail.com\n');
+      vfs.writeFile('/root', '.gitconfig', '[core]\\n  # Browser guest: Git author identity configured by authorized host only.\\n');
     }
 
     if (forceCorruption) {
