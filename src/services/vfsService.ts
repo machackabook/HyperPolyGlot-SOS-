@@ -50,8 +50,8 @@ Type 'help' to inspect all commands, or try:
           content: `# GEMINI.MD // OMNI-NEXUS & SCRIBE MASTER ARCHITECTURAL MEMORY ENGRAMS
 Version: 2.0-SOVEREIGN // Tier 5 Maximum Nexus Core
 Canonical High-Integer Prime Anchor: 137451921129154222
-Owner Account: machackabook@gmail.com
-Status: 100% OPERATIONAL & VERIFIED
+Owner Account: Not authenticated in this browser
+Status: Reference specification, not a live session
 
 ## 1. OMNI-NEXUS ARCHITECTURE SUMMARY
 - Epoch 1 (Fragmented Edge): Termux A15, Lenovo Chromebook, Dell Optiplex.
@@ -76,7 +76,7 @@ Status: 100% OPERATIONAL & VERIFIED
         },
         '.gitconfig': {
           type: 'file',
-          content: `[user]\n  name = Sovereign Operator\n  email = machackabook@gmail.com\n[core]\n  primeAnchor = 137451921129154222\n`,
+          content: `[core]\n  primeAnchor = 137451921129154222\n# No default GitHub user; configure author separately on the authorized host.\n`,
           metadata: { created: Date.now(), modified: Date.now(), permissions: 'rw-r--r--', size: 140 },
         },
         projects: {
