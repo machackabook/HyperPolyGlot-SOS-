@@ -82,7 +82,7 @@ const BUILTIN_COMMANDS = [
   'tree', 'find', 'grep', 'vfs', 'render', 'sentiment', 'color', 'gravity',
   'speed', 'turbulence', 'burst', 'calm', 'shatter', 'gemini', 'ask', 'ai',
   'voice', 'speak', 'mic', 'listen', 'wakeword', '963', 'node', 'js', 'git', 'singularity', 'satcom',
-  'swarm', 'arbitrage', 'voip', 'mcp', 'ollama', 'macro', 'quine', 'telemetry', 'date', 'uptime',
+  'swarm', 'arbitrage', 'voip', 'mcp', 'god', 'forge', 'ollama', 'macro', 'quine', 'telemetry', 'date', 'uptime',
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync', 'device',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
@@ -999,6 +999,13 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   voip status             : Real browser-observed call and host signaling states
   voip open               : Open Cryptic media controls (explicit camera/mic consent)
   voip hangup             : Request end of local call
+  god status              : Authoritative local GOD network policy status
+  god check <cap> [url]    : Automated, fail-closed network capability decision
+  forge status            : Real Golden Army Forge / Singularity state
+  forge plan <cap> [url]   : GOD-verified execution planning
+  forge compute <steps>    : Local SQE computation (no network approval)
+  forge result <job_id>    : Read back actual worker result
+  forge github <OWNER/REPO>: GOD-controlled public GitHub metadata read
   swarm status            : Actual local bounded worker queue + live D3 display
   swarm compute <steps>   : Submit verified symplectic workload (1..10000)
   swarm result <job_id>   : Retrieve a real completed worker job
@@ -1725,6 +1732,64 @@ Attractor Gravity Well: Active   Mode: WITHOUT GOVERNOR`, 'output');
 Frequency: 533.25 MHz UHF Channel 24 | Ping Loaded Datacom: 84.2%
 Active Hops: 4 (Circular Reflection Loop Guaranteed)
 [D3 Satellite Constellation Chord Ring Rendered in Background]`, 'output');
+        }
+        break;
+      }
+
+      case 'god': {
+        const sub=(args[0]||'status').toLowerCase();
+        if(quineMeshService.status().state!=='connected'){
+          appendLine('GOD policy engine unavailable: pair the trusted local host with mesh connect. Local mathematical processing is unaffected.','system');
+          break;
+        }
+        try {
+          if(sub==='status'){
+            appendLine(JSON.stringify(await quineMeshService.godStatus(),null,2),'output');
+          }else if(sub==='check'){
+            const capability=args[1]||'local.compute';
+            const destination=args[2]||null;
+            appendLine(JSON.stringify(await quineMeshService.godDecide(capability,destination),null,2),'output');
+          }else{
+            appendLine('god status | god check <capability> [https://destination]','system');
+          }
+        }catch(e:any){
+          appendLine('GOD policy query failed: '+String(e?.message||e),'error');
+        }
+        break;
+      }
+      case 'forge': {
+        const sub=(args[0]||'status').toLowerCase();
+        if(quineMeshService.status().state!=='connected'){
+          appendLine('Golden Army Forge requires the paired local runtime; run mesh connect. No remote network permission is assumed.','system');
+          break;
+        }
+        try{
+          if(sub==='status'){
+            appendLine(JSON.stringify(await quineMeshService.forgeStatus(),null,2),'output');
+          }else if(sub==='plan'){
+            const capability=args[1]||'local.compute';
+            appendLine(JSON.stringify(await quineMeshService.forgePlan(capability,args[2]||null),null,2),'output');
+          }else if(sub==='compute'){
+            const steps=Number(args[1]||100);
+            if(!Number.isSafeInteger(steps)||steps<1||steps>10000){
+              appendLine('forge compute <steps 1..10000>','error');break;
+            }
+            const data=await quineMeshService.forgeCompute('symplectic',{steps});
+            appendLine(JSON.stringify(data,null,2),'output');
+          }else if(sub==='result'){
+            appendLine(JSON.stringify(await quineMeshService.runtimeResult(args[1]),null,2),'output');
+          }else if(sub==='github'){
+            const identifier=args[1]||'';
+            if(!/^[A-Za-z0-9_.-]{1,60}\/[A-Za-z0-9_.-]{1,120}$/.test(identifier)){
+              appendLine('forge github <OWNER/REPO> — public metadata, GOD policy required','error');break;
+            }
+            const target='https://api.github.com/repos/'+identifier;
+            appendLine(JSON.stringify(await quineMeshService.forgeGitHubRead(target),null,2),'output');
+          }else{
+            appendLine('forge status | plan <capability> [url] | compute <steps> | result <job_id> | github <OWNER/REPO>','system');
+          }
+        }catch(e:any){
+          appendLine('Forge operation unavailable or denied: '+String(e?.message||e),'error');
         }
         break;
       }
