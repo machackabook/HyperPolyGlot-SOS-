@@ -6,6 +6,7 @@ import { GaiaCognitionPanel } from './components/GaiaCognitionPanel';
 import { startNexusSync } from './services/nexusEvolutionSync.mjs';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
 import { XYouTubeAICard } from './components/XYouTubeAICard';
+import { NexusSystemPages } from './components/NexusSystemPages';
 import { EnvironmentState } from './types';
 import { DEFAULT_RGB_LED_CONFIG } from './services/colorProfileService';
 import { DEFAULT_YOUTUBE_STATE } from './services/youtubeService';
@@ -79,6 +80,8 @@ export function App() {
       {/* Explicit opt-in mathematical field console; original HyperTerminal stays intact. */}
       <ResonanceConsole />
       <GaiaCognitionPanel />
+      {/* Private/live data requires each device to pair with its local bridge. */}
+      <NexusSystemPages />
     </div>
   );
 }
