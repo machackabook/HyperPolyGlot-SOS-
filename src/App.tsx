@@ -6,6 +6,7 @@ import { GaiaCognitionPanel } from './components/GaiaCognitionPanel';
 import { startNexusSync } from './services/nexusEvolutionSync.mjs';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
 import { XYouTubeAICard } from './components/XYouTubeAICard';
+import { GaiaConnectionCenter } from './components/GaiaConnectionCenter';
 import { CrystallineCrossvoidGate } from './components/CrystallineCrossvoidGate';
 import { NexusSystemPages } from './components/NexusSystemPages';
 import { EnvironmentState } from './types';
@@ -76,6 +77,8 @@ export function App() {
       <YouTubeBackgroundPlayer envState={envState} setEnvState={setEnvState} />
       {/* Optional X/Grok chat card: authenticated local provider and genuine YouTube embed. */}
       <XYouTubeAICard envState={envState} />
+      {/* Continuous *measured* account/service status; one-shot authorized toasts. */}
+      <GaiaConnectionCenter />
 
       {/* 100% Visual Background Renderer (Polymorphic Neurality) */}
       <VisualRenderer3D envState={envState} />
