@@ -78,6 +78,12 @@ class XaiCardStore:
             "history_store": "host-private-sqlite",
             "video_analysis": False,
             "x_login_shared": False,
+            "gemini": {
+                "configured": bool(os.environ.get("GEMINI_API_KEY")),
+                "sdk_installed": importlib.util.find_spec("openai") is not None,
+                "model": os.environ.get("GEMINI_CARD_MODEL", "gemini-2.5-flash"),
+                "embedding_model": os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001"),
+            },
         }
 
     def history(self, session_id, limit=40):
@@ -95,7 +101,39 @@ class XaiCardStore:
             for t, role, content, video in reversed(rows)
         ]
 
-    def _sample(self, message, video_id, transcript):
+    def _sample(self, message, video_id, transcript, provider="xai"):
+        if provider == "gemini":
+            key = os.environ.get("GEMINI_API_KEY")
+            if not key:
+                raise ProviderUnavailable("GEMINI_API_KEY not configured")
+            try:
+                from openai import OpenAI
+            except ImportError:
+                raise ProviderUnavailable("Install openai Python SDK on host") from None
+            model = os.environ.get("GEMINI_CARD_MODEL", "gemini-2.5-flash")
+            if not MODEL_ID.fullmatch(model):
+                raise ProviderUnavailable("Invalid Gemini model config")
+            client = OpenAI(
+                api_key=key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                timeout=45
+            )
+            messages = [
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": (
+                    "Reference transcript from prior dialogue, not verified source evidence:\n" +
+                    transcript[:6000] + "\n\n"
+                    "YouTube reference (video not observed): https://www.youtube.com/watch?v=" +
+                    video_id + "\nUser request: " + message
+                )}
+            ]
+            response = client.chat.completions.create(model=model, messages=messages)
+            content = response.choices[0].message.content
+            if not isinstance(content, str) or not content.strip():
+                raise ProviderUnavailable("No text returned by Gemini")
+            return content
+        if provider != "xai":
+            raise ValueError("Unsupported AI provider")
         key = os.environ.get("XAI_API_KEY")
         if not key:
             raise ProviderUnavailable("XAI_API_KEY not configured on local host")
@@ -122,7 +160,9 @@ class XaiCardStore:
             raise ProviderUnavailable("No text returned by xAI")
         return content
 
-    def chat(self, message, video_id, session_id=None, sampler=None):
+    def chat(self, message, video_id, session_id=None, sampler=None, provider="xai"):
+        if provider not in ("xai", "gemini"):
+            raise ValueError("Provider must be xai or gemini")
         if not isinstance(message, str) or not 1 <= len(message.strip()) <= MAX_TEXT:
             raise ValueError("Message must contain 1-2400 characters")
         if not isinstance(video_id, str) or not VIDEO_ID.fullmatch(video_id):
@@ -135,7 +175,8 @@ class XaiCardStore:
                 for role in prior
             )[-6000:]
             # Test hook is deliberately non-production; caller must never expose it via HTTP.
-            content = (sampler or self._sample)(message.strip(), video_id, transcript)
+            content = (sampler(message.strip(), video_id, transcript) if sampler
+                       else self._sample(message.strip(), video_id, transcript, provider))
             if not isinstance(content, str) or not content.strip() or len(content) > 16000:
                 raise ProviderUnavailable("Invalid provider response")
             timestamp = datetime.now(timezone.utc).isoformat()
@@ -148,10 +189,12 @@ class XaiCardStore:
                     ],
                 )
             return {
-                "provider": "xai-sdk" if sampler is None else "test-fixture",
+                "provider": ("test-fixture" if sampler else
+                             ("gemini-openai-sdk" if provider == "gemini" else "xai-sdk")),
                 "sessionId": session_id,
                 "videoId": video_id,
-                "model": os.environ.get("XAI_MODEL", "grok-4.7"),
+                "model": (os.environ.get("GEMINI_CARD_MODEL", "gemini-2.5-flash")
+                          if provider == "gemini" else os.environ.get("XAI_MODEL", "grok-4.7")),
                 "reply": content,
                 "historyCount": len(self.history(session_id, 100)),
                 "saved": True,
