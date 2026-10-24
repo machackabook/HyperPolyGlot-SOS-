@@ -8,7 +8,7 @@ import { createCrypticCall } from '../services/gaiaWebRTC.mjs';
 import { gaiaCommsState } from '../services/gaiaCommsState.mjs';
 
 type Turn = {role:'user'|'assistant';content:string};
-type Provider = 'xai'|'gemini';
+type Provider = 'ollama'|'xai'|'gemini';
 type Status = {configured:boolean;sdk_installed:boolean;model:string};
 type FullStatus = Status&{gemini?:Status};
 type Invite = {title:string;videoId:string;roomId:string;createdAt:number;expiresAt:number;kind:string;meetUrl?:string};
@@ -21,7 +21,10 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
   const [invite,setInvite]=useState<Invite|null>(null);
   const [meetUrl,setMeetUrl]=useState('');
   const [notice,setNotice]=useState('');
-  const [provider,setProvider]=useState<Provider>('xai');
+  const [provider,setProvider]=useState<Provider>('ollama');
+  const [localStatus,setLocalStatus]=useState<any>(null);
+  const [localPdf,setLocalPdf]=useState('');
+  const [pdfNotice,setPdfNotice]=useState('');
   const [status,setStatus]=useState<FullStatus|null>(null);
   const [mesh,setMesh]=useState(quineMeshService.status().state==='connected');
   const [prompt,setPrompt]=useState('');
@@ -43,7 +46,9 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
   const selectedMeetURL=invite?.meetUrl||meetUrl;
   const verifiedMeetURL=/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(selectedMeetURL)?selectedMeetURL:'';
   const aiStatus=provider==='gemini'?status?.gemini:status;
-  const ready=mesh&&!!aiStatus?.configured&&!!aiStatus?.sdk_installed;
+  const ready=mesh&&(provider==='ollama'?
+    !!localStatus?.reachable&&!!localStatus?.model_available:
+    !!aiStatus?.configured&&!!aiStatus?.sdk_installed);
 
   useEffect(()=>quineMeshService.subscribe((x:any)=>setMesh(x.state==='connected')),[]);
   useEffect(()=>{
@@ -73,10 +78,12 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
     let live=true;
     quineMeshService.xaiCardStatus().then((value:FullStatus)=>{if(live)setStatus(value)})
       .catch(()=>{if(live)setStatus(null)});
+    quineMeshService.localAIStatus().then((value:any)=>{if(live)setLocalStatus(value)})
+      .catch(()=>{if(live)setLocalStatus(null)});
     return()=>{live=false};
   },[open,mesh]);
   useEffect(()=>{
-    if(!open||!mesh){setSid(null);setTurns([]);return}
+    if(!open||!mesh||provider==='ollama'){setSid(null);setTurns([]);return}
     let id='';try{id=sessionStorage.getItem('gaia-xcard-private-'+provider)||''}catch{}
     if(!id){setSid(null);setTurns([]);return}
     let live=true;
@@ -125,20 +132,58 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
     try{window.location.href='sms:?body='+encodeURIComponent('GAIA Watch: '+getLink(invite||createInvite()))}
     catch(e:any){setNotice(String(e?.message||e))}
   }
+  async function importPdf(e:React.ChangeEvent<HTMLInputElement>){
+    const file=e.target.files?.[0];
+    if(!file)return;
+    setPdfNotice('');setLocalPdf('');
+    try{
+      if(quineMeshService.status().state!=='connected')throw Error('Pair local runtime first');
+      const result=await quineMeshService.localPDF(file);
+      const text=Array.isArray(result.pages)
+        ? result.pages.map((x:any)=>'[PAGE '+x.page+'] '+String(x.text||'')).join('\n').slice(0,4200)
+        : '';
+      setLocalPdf(text);
+      setPdfNotice('Extracted '+String(result.pages_extracted)+
+        ' page(s) locally. SHA256 '+String(result.sha256||'').slice(0,12)+
+        '. No cloud upload.');
+    }catch(err:any){setPdfNotice('Local PDF unavailable: '+String(err?.message||err))}
+    finally{e.target.value=''}
+  }
+
   async function ask(e:React.FormEvent){
     e.preventDefault();if(!prompt.trim()||busy)return;
     if(!ready){setError('Pair local Quine mesh and configure the selected AI provider');return}
     setBusy(true);setError('');
     try{
       const question=prompt.trim();
-      const result=await quineMeshService.xaiCardChat(question,videoId,sid,provider);
-      const expected=provider==='gemini'?'gemini-openai-sdk':'xai-sdk';
-      if(result.provider!==expected||!result.saved||typeof result.reply!=='string')
-        throw Error('No verified provider response');
-      setSid(result.sessionId);
-      try{sessionStorage.setItem('gaia-xcard-private-'+provider,result.sessionId)}catch{}
-      setTurns(old=>[...old.slice(-28),{role:'user',content:question},
-        {role:'assistant',content:result.reply}]);
+      if(provider==='ollama'){
+        // Local-only. Retrieved documents and remembered dialogue stay on the
+        // host; do not route them to any paid API unless separately requested.
+        const recall=quineMeshService.scribeSearch(question.slice(0,256),2).catch(()=>null);
+        const found:any=await Promise.race([
+          recall,new Promise<null>(resolve=>setTimeout(()=>resolve(null),150))
+        ]);
+        const engrams=Array.isArray(found?.results)?found.results.slice(0,2)
+          .filter((r:any)=>typeof r.snippet==='string'&&typeof r.source_ref==='string')
+          .map((r:any)=>'[SOURCE '+String(r.source_ref).slice(0,170)+'] '+
+            r.snippet.slice(0,500)).join('\n'):'';
+        const previous=turns.slice(-4).map(x=>x.role+': '+x.content.slice(0,480)).join('\n');
+        const context=[localPdf,engrams,previous].filter(Boolean).join('\n\n').slice(0,5900);
+        const result=await quineMeshService.localAIChat(question,context,384);
+        if(result.source!=='real-local-ollama'||typeof result.text!=='string'||!result.text.trim())
+          throw Error('No real local model response');
+        setTurns(old=>[...old.slice(-28),{role:'user',content:question},
+          {role:'assistant',content:result.text}]);
+      }else{
+        const result=await quineMeshService.xaiCardChat(question,videoId,sid,provider);
+        const expected=provider==='gemini'?'gemini-openai-sdk':'xai-sdk';
+        if(result.provider!==expected||!result.saved||typeof result.reply!=='string')
+          throw Error('No verified provider response');
+        setSid(result.sessionId);
+        try{sessionStorage.setItem('gaia-xcard-private-'+provider,result.sessionId)}catch{}
+        setTurns(old=>[...old.slice(-28),{role:'user',content:question},
+          {role:'assistant',content:result.reply}]);
+      }
       setPrompt('');
     }catch(e:any){setError('AI unavailable: '+String(e?.message||e))}
     finally{setBusy(false)}
@@ -228,10 +273,27 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
               <strong className="text-xs">Grok / Gemini · Video Call</strong>
               <select aria-label="AI provider" className="rounded bg-black/60 p-1 text-xs" value={provider}
                 onChange={e=>setProvider(e.target.value as Provider)}>
-                <option value="xai">Grok · xAI</option><option value="gemini">Gemini · OpenAI SDK</option>
+                <option value="ollama">Ollama · Local default</option>
+                <option value="xai">Grok · xAI API</option>
+                <option value="gemini">Gemini · Authenticated API</option>
               </select>
             </div>
-            <p className="text-[11px] text-slate-300">{ready?'AI host configured':'AI provider not connected'} · video has no automatic transcript</p>
+            <p className="text-[11px] text-slate-300">
+              {ready?'Actual model available on paired host':'Selected model unavailable'}
+              {provider==='ollama'?' · zero cloud inference calls':' · provider key required'}
+              {' · video has no automatic transcript'}
+            </p>
+            {provider==='ollama'&&<div className="rounded-lg border border-white/15 p-2 text-xs">
+              <label htmlFor="gaia-pdf" className="block text-cyan-200">
+                Private PDF → local text → memory seed
+              </label>
+              <input id="gaia-pdf" type="file" accept="application/pdf,.pdf"
+                onChange={importPdf} className="mt-1 w-full text-xs" />
+              <p className="mt-1 text-[10px] text-slate-400">
+                Up to 8 MiB, PyMuPDF on host. Source bytes never sent to xAI or Gemini.
+              </p>
+              {pdfNotice&&<p role="status" className="break-words text-cyan-200">{pdfNotice}</p>}
+            </div>
             <div className="min-h-[60px] max-h-[130px] space-y-1 overflow-y-auto">
               {turns.length?turns.map((t,i)=><p key={i} className="rounded bg-black/30 p-2 text-xs break-words whitespace-pre-wrap">
                 <strong>{t.role==='user'?'You: ':'AI: '}</strong>{t.content}</p>):
