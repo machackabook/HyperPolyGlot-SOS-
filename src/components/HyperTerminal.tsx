@@ -59,6 +59,7 @@ import { iterationStateService } from '../services/iterationStateService';
 import { pipelineEngine } from '../services/pipelineEngine';
 import { causalCore, routeCapability } from '../services/causalCore.mjs';
 import { quineMeshService } from '../services/quineMeshService.mjs';
+import { SYSTEM_PAGES, openSystemPage, isPageTerminalCommand } from '../services/nexusSystemRouter.mjs';
 import { gaiaCommsState } from '../services/gaiaCommsState.mjs';
 import { axsResourceGovernor, octaveTrace } from '../services/axsResourceGovernor.mjs';
 import { CommandAutocomplete } from './CommandAutocomplete';
@@ -86,7 +87,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync', 'device',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe', 'memory', 'ghmount'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'page', 'pages', 'systems', 'axs', 'mesh', 'scribe', 'memory', 'ghmount'
 ];
 
 export interface SentimentVisualConfig {
@@ -275,6 +276,20 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const activeInstance = instances.find((i) => i.id === activeInstanceId) || instances[0];
+  // Source-scoped terminal instance: no account identity is inferred from a route.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('nexus:terminal-instance',{detail:{id:activeInstanceId}}));
+  }, [activeInstanceId]);
+  // Only fixed, non-privileged system-page commands can enter the terminal.
+  useEffect(() => {
+    const onPageCommand=(event:Event)=>{
+      const d=(event as CustomEvent).detail;
+      if(d?.origin!=='system-pages'||!isPageTerminalCommand(d.command))return;
+      void executeCommand(d.command);
+    };
+    window.addEventListener('nexus:terminal-command',onPageCommand);
+    return()=>window.removeEventListener('nexus:terminal-command',onPageCommand);
+  }, [activeInstanceId]);
 
   // Auto-scroll on new terminal line
   useEffect(() => {
@@ -870,6 +885,20 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         }
         break;
       }
+      case 'pages':
+      case 'systems':
+      case 'page': {
+        const slug=(args[0]||'list').toLowerCase();
+        if(slug==='list'){
+          appendLine(SYSTEM_PAGES.map((x:any)=>x.slug.padEnd(15)+' | '+x.title).join('\n'),'output');
+        }else if(SYSTEM_PAGES.some((x:any)=>x.slug===slug)){
+          openSystemPage(slug);
+          appendLine('Opened '+slug+' as a separate GAIA Mesh v4 system page. Host data requires local pairing.','system');
+        }else{
+          appendLine('Unknown page. Use: pages list | page <slug>','error');
+        }
+        break;
+      }
       case 'mesh': {
         const op=(args[0]||'status').toLowerCase();
         if(op==='status'){appendLine(JSON.stringify(quineMeshService.status(),null,2),'output');}
@@ -993,6 +1022,8 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   ollama ask <prompt>     : Explicit local response using session inference ticket
   echo TEXT | ollama      : Feed bounded terminal pipeline text to local inference
   gemini <prompt>         : Explicit external Gemini backend (separate provider auth)
+  pages list              : List dedicated GAIA system pages
+  page <slug>             : Open shareable system page without remounting terminal
   memory status           : Authenticated local Memory Fabric status
   memory recall <query>   : Source-indexed memory retrieval; cache for AI context
   scribe search <query>   : Existing local Scribe lookup
