@@ -100,8 +100,11 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,38}\/[-a-zA-Z0-9_.]{1,100}$/.test(repository))
     throw new TypeError('Expected safe mount and GitHub OWNER/REPO');
   if(state.state!=='connected')throw new Error('Pair the local bridge first');
+  const authorizedHost=state.host?.node_session;
+  if(!authorizedHost)throw new Error('Authenticated host session unavailable');
   await gaiaAuthorizationGate.request('github.mount.clone',mount+'@'+repository);
-  if(state.state!=='connected')throw new Error('Bridge disconnected before authorization completed');
+  if(state.state!=='connected'||state.host?.node_session!==authorizedHost)
+   throw new Error('Host session changed before authorization completed');
   return writeMount('/v1/mounts/clone',{mount,repository});
  }
  async function linkMount(mount,url){
@@ -112,9 +115,12 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
     throw new TypeError('Website URL cannot contain login credentials');
   if(state.state!=='connected')throw new Error('Pair the local bridge first');
   // Do not expose URL query values or tokens inside authorization prompts.
+  const authorizedHost=state.host?.node_session;
+  if(!authorizedHost)throw new Error('Authenticated host session unavailable');
   await gaiaAuthorizationGate.request('github.mount.link',
     (mount+'@'+target.hostname+target.pathname).slice(0,220));
-  if(state.state!=='connected')throw new Error('Bridge disconnected before authorization completed');
+  if(state.state!=='connected'||state.host?.node_session!==authorizedHost)
+   throw new Error('Host session changed before authorization completed');
   return writeMount('/v1/mounts/link',{mount,url});
  }
 
