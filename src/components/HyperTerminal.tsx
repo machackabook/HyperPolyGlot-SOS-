@@ -84,7 +84,7 @@ const BUILTIN_COMMANDS = [
   'voice', 'speak', 'mic', 'listen', 'wakeword', '963', 'node', 'js', 'git', 'singularity', 'satcom',
   'swarm', 'arbitrage', 'voip', 'mcp', 'ollama', 'macro', 'quine', 'telemetry', 'date', 'uptime',
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
-  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
+  'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync', 'device',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
   'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe', 'memory', 'ghmount'
 ];
@@ -1773,23 +1773,49 @@ Active Hops: 4 (Circular Reflection Loop Guaranteed)
         break;
       }
 
+      case 'device': {
+        // Session pairing proves control of the approved bridge capability;
+        // geolocation is an independent, browser-provided positioning signal.
+        const geo=geoNexusService.getTelemetry();
+        const bridge=quineMeshService.status();
+        appendLine(JSON.stringify({
+          hostBridgePaired:bridge.state==='connected',
+          location:geo.status==='active'?'browser-reported':'not-available',
+          locationAccuracyMeters:geo.status==='active'?geo.accuracyMeters:null,
+          locationObservedAt:geo.observedAt||null,
+          hardwareAttestation:'not-configured',
+          spoofResistance:'browser-geolocation alone cannot establish device identity',
+          privilegedHostOperations:'require authenticated scoped backend'
+        },null,2),'output');
+        break;
+      }
       case 'geosync': {
-        const sub = (args[0] || 'on').toLowerCase();
-        if (sub === 'off') {
-          setEnvState(prev => ({ ...prev, topology: 'torus' }));
-          appendLine('Geolocation synchronization detached. Returning to orbital torus.', 'system');
-        } else {
-          appendLine('Initializing Sovereign Physical Node Synchronization...', 'warn', '🛰️');
-          const tel = await geoNexusService.syncTerminalWithGeo();
-          setEnvState(prev => ({ ...prev, topology: 'earth_nasa' }));
-          
-          if (tel.weather) {
-            setTimeout(() => {
-              appendLine(`[AURORA GEOWEATHER]: ${tel.weather?.temp}°C, ${tel.weather?.description}. Syncing environmental shaders.`, 'ai', '⛅');
-            }, 3000);
-          }
-          
-          appendLine(`Transitioning to physical node: ${tel.plusCode} (${tel.lat.toFixed(4)}, ${tel.lng.toFixed(4)})`, 'success');
+        const sub=(args[0]||'status').toLowerCase();
+        if(sub==='off'||sub==='clear'){
+          geoNexusService.clearLocation();
+          setEnvState(prev=>({...prev,topology:'torus'}));
+          appendLine('TerraSphere coordinates cleared from this browser session.','system');
+        }else if(sub==='status'){
+          const pos=geoNexusService.getTelemetry();
+          appendLine(JSON.stringify({
+            source:pos.source||'none',status:pos.status,
+            approximateLocation:pos.status==='active'?{
+              latitude:Number(pos.lat.toFixed(2)),longitude:Number(pos.lng.toFixed(2)),
+              accuracyMeters:pos.accuracyMeters}:null,
+            deviceAttested:false,observedAt:pos.observedAt||null,
+            networkDisclosure:'no automatic geocode request'
+          },null,2),'output');
+        }else if(sub==='on'){
+          try{
+            const fix=await geoNexusService.syncTerminalWithGeo();
+            setEnvState(prev=>({...prev,topology:'earth_nasa'}));
+            appendLine('TerraSphere mapped: browser-reported position (~'+
+              fix.lat.toFixed(2)+', '+fix.lng.toFixed(2)+
+              '; accuracy '+Math.round(fix.accuracyMeters||0)+'m). Hardware identity unverified.',
+              'success');
+          }catch(e:any){appendLine('TerraSphere not activated: '+String(e?.message||e),'error')}
+        }else{
+          appendLine('geosync on | status | off · device status','system');
         }
         break;
       }
