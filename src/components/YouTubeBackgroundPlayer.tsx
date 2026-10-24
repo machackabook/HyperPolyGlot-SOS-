@@ -354,7 +354,7 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
               key={`${yt.currentTrack.id}-${currentPlaylist?.youtubePlaylistId || 'none'}`}
               src={youtubeService.buildEmbedUrl(embedTarget, yt.isPlaying, yt.isMuted)}
               title={yt.currentTrack.title}
-              className="w-[110vw] h-[110vh] max-w-none pointer-events-auto border-0"
+              className="w-[110vw] h-[110vh] max-w-none pointer-events-none border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
