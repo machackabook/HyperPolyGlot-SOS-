@@ -59,6 +59,7 @@ import { iterationStateService } from '../services/iterationStateService';
 import { pipelineEngine } from '../services/pipelineEngine';
 import { causalCore, routeCapability } from '../services/causalCore.mjs';
 import { quineMeshService } from '../services/quineMeshService.mjs';
+import { gaiaCommsState } from '../services/gaiaCommsState.mjs';
 import { axsResourceGovernor, octaveTrace } from '../services/axsResourceGovernor.mjs';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { TerminalBorderWaveform } from './TerminalBorderWaveform';
@@ -934,6 +935,14 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   memory status           : Authenticated local Memory Fabric status
   memory recall <query>   : Source-indexed memory retrieval; cache for AI context
   scribe search <query>   : Existing local Scribe lookup
+  voip status             : Real browser-observed call and host signaling states
+  voip open               : Open Cryptic media controls (explicit camera/mic consent)
+  voip hangup             : Request end of local call
+  swarm status            : Actual local bounded worker queue + live D3 display
+  swarm compute <steps>   : Submit verified symplectic workload (1..10000)
+  swarm result <job_id>   : Retrieve a real completed worker job
+  mcp list                : Discover GAIA native MCP adapter tool catalog
+  mcp call <tool_name>    : Read GAIA runtime / comms adapter status
   core status             : Real browser-local event and SQE state
   core graph              : Observed ternary sparse graph (count / frequency)
   core phase              : Numerical symplectic state
@@ -1643,29 +1652,46 @@ Active Hops: 4 (Circular Reflection Loop Guaranteed)
       }
 
       case 'swarm': {
-        setEnvState((prev) => ({
-          ...prev,
-          d3Stream: {
-            ...prev.d3Stream,
-            active: true,
-            shape: 'force',
-            title: '6,000-Node Tethermesh Swarm',
-            lastCommand: 'swarm',
-            nodeCount: 44,
-            packetRate: 3600,
-            throughputMbps: 1250.0,
-            geminiTelemetrySummary: 'Tethermesh Cluster: 6,000 nodes synchronized. Threat pruning and cache defense active.',
-          },
-        }));
-        audioVoiceService.playEarcon('stream');
-
-        appendLine(`6,000-NODE VIRTUAL AGENT SWARM (TETHERMESH CLUSTER)
-  - Vanguard Brigade : 2,000 Nodes (Threat Pruning Active)
-  - Shield Division  : 2,000 Nodes (Memory & Cache Defense)
-  - Recon Brigade    : 1,500 Nodes (Network Anomaly Scanning)
-  - God-Sovereign    : 500 Nodes   (Soul Stone Policy Enforcers)
-Status: 100% HEALTHY   Packet Drop Rate: -0.00%
-[D3 6k Node Cluster Force Graph Active in Background]`, 'output');
+        const sub = (args[0] || 'status').toLowerCase();
+        if (sub === 'result') {
+          try {
+            appendLine(JSON.stringify(await quineMeshService.runtimeResult(args[1]),null,2),'output');
+          } catch(e:any) { appendLine('Swarm readback unavailable: '+String(e?.message||e),'error'); }
+          break;
+        }
+        if (sub === 'compute') {
+          const steps=Number(args[1]||100);
+          if(!Number.isSafeInteger(steps)||steps<1||steps>10000){
+            appendLine('Usage: swarm compute <steps 1..10000>','error'); break;
+          }
+          try {
+            const job=await quineMeshService.runtimeSubmit('symplectic',{steps});
+            appendLine(JSON.stringify(job,null,2),'output');
+          }catch(e:any){appendLine('Compute not started: '+String(e?.message||e),'error');}
+          break;
+        }
+        try {
+          if (quineMeshService.status().state !== 'connected')throw Error('Local bridge disconnected');
+          const live=await quineMeshService.runtimeStatus();
+          setEnvState(prev=>({...prev,d3Stream:{...prev.d3Stream,
+            active:true,shape:'force',
+            title:'Observed GAIA Local Worker Swarm',
+            lastCommand:'swarm '+sub,
+            nodeCount:live.workers_configured||0,
+            packetRate:0,throughputMbps:0,
+            geminiTelemetrySummary:'Measured host workers='+live.workers_configured+
+              ' running='+live.jobs_running+' queued='+live.jobs_queued+
+              '; external nodes verified='+live.external_nodes_verified
+          }}));
+          appendLine(JSON.stringify(live,null,2),'output');
+        }catch(e:any){
+          setEnvState(prev=>({...prev,d3Stream:{...prev.d3Stream,
+            active:true,shape:'force',nodeCount:0,packetRate:0,throughputMbps:0,
+            title:'GAIA Swarm (awaiting real connection)',
+            geminiTelemetrySummary:'Unconnected: real worker state unavailable'
+          }}));
+          appendLine('Swarm visualization active; no real local workers attached: '+String(e?.message||e),'system');
+        }
         break;
       }
 
@@ -1700,25 +1726,43 @@ Pool Liquidity: $54,820.50 USD   Stripe & Cash App Proxy Active`, 'table');
       }
 
       case 'voip': {
-        appendLine(`VIRTUAL MOBILE VoIP & eSIM CHASSIS
-  Carrier: Cryptic Sovereign Satcom eSIM (ICCID: 8901410321111859201F)
-  Virtual Numbers: +1 (650) 555-GOOG, +1 (415) 555-SOV1
-  Whisper STT Resolution: 384,000 Hz Sub-Atomic
-  Audio Codec: OPUS_HD 128kbps Encrypted`, 'output');
+        const sub=(args[0]||'status').toLowerCase();
+        if(sub==='open'||sub==='call'||sub==='answer'){
+          window.dispatchEvent(new Event('gaia:open-x-card'));
+          appendLine('Opened Cryptic Communications call controls; microphone/camera are only activated when you accept in the card.','system');
+          break;
+        }
+        if(sub==='hangup'){
+          window.dispatchEvent(new Event('gaia:hangup-call'));
+          appendLine('Sent hangup to browser call interface.','system');break;
+        }
+        const observed=gaiaCommsState.snapshot();
+        let host=null;
+        if(quineMeshService.status().state==='connected'){
+          try{host=(await quineMeshService.mcpRead('gaia_comms_status')).result}
+          catch{ /* Host status unavailable: preserve actual browser observations */ }
+        }
+        appendLine(JSON.stringify({browser_observed:observed,host_configuration:host,
+          configured_signaling:host?.wss_configured||false,
+          provider:'browser WebRTC with STUN; no cellular/eSIM claim'},null,2),'output');
         break;
       }
 
       case 'mcp': {
-        const sub = (args[0] || 'list').toLowerCase();
-        if (sub === 'list') {
-          appendLine(`MODEL CONTEXT PROTOCOL (MCP) REGISTERED SERVERS:
-  1. filesystem-mcp (v1.2.0) : read_file, write_file, list_dir, delete_file
-  2. exec-mcp (v1.0.0)       : run_js, eval_math
-  3. crypto-mcp (v1.0.0)     : sha256, uuid, base64_encode
-  4. system-mcp (v1.1.0)     : get_telemetry, get_environment`, 'table');
-        } else {
-          appendLine(`mcp: server '${args[1] || 'default'}' responded status=OK.`, 'success');
+        const sub=(args[0]||'list').toLowerCase();
+        if(quineMeshService.status().state!=='connected'){
+          appendLine('GAIA MCP adapter disconnected. Start the localhost Quine bridge and use mesh connect.','system');break;
         }
+        try {
+          if(sub==='list'||sub==='status'){
+            appendLine(JSON.stringify(await quineMeshService.mcpCatalog(),null,2),'output');
+          }else if(sub==='call'){
+            const result=await quineMeshService.mcpRead(args[1]||'gaia_runtime_status');
+            appendLine(JSON.stringify(result,null,2),'output');
+          }else{
+            appendLine('mcp list | mcp status | mcp call <gaia_runtime_status|gaia_comms_status>','system');
+          }
+        }catch(e:any){appendLine('MCP adapter unavailable: '+String(e?.message||e),'error');}
         break;
       }
 
