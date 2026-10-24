@@ -3,6 +3,7 @@ import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { ResonanceConsole } from './components/ResonanceConsole';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
+import { XYouTubeAICard } from './components/XYouTubeAICard';
 import { EnvironmentState } from './types';
 import { DEFAULT_RGB_LED_CONFIG } from './services/colorProfileService';
 import { DEFAULT_YOUTUBE_STATE } from './services/youtubeService';
@@ -61,6 +62,8 @@ export function App() {
     <div className="relative w-screen h-screen overflow-hidden bg-[#02050b] select-none font-mono">
       {/* Dynamic YouTube Background Video Player & Content Transition Layer */}
       <YouTubeBackgroundPlayer envState={envState} setEnvState={setEnvState} />
+      {/* Optional X/Grok chat card: authenticated local provider and genuine YouTube embed. */}
+      <XYouTubeAICard envState={envState} />
 
       {/* 100% Visual Background Renderer (Polymorphic Neurality) */}
       <VisualRenderer3D envState={envState} />
