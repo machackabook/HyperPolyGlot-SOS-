@@ -202,6 +202,16 @@ async function startServer() {
     return res.json(apiKeyPool.getPoolStatus());
   });
 
+  // Actual runtime discovery. Static hosting cannot serve POST /api/chat.
+  // Provider status is factual; no simulated model capability is advertised.
+  app.get('/api/runtime-status', (_req, res) => {
+    return res.json({
+      service: 'hyperterminal-node',
+      chat: { handler: 'POST /api/chat', provider: apiKeyPool.hasKeys() ? 'gemini' : 'none',
+        ready: apiKeyPool.hasKeys() },
+      mountBridge: 'separate-authenticated-localhost-service',
+    });
+  });
   // API endpoint: /api/chat
   // Receives prompt, ongoing conversation history, and current environment state
   // Analyzes sentiment, dictates background 3D/4D environment alteration, and provides AI response
