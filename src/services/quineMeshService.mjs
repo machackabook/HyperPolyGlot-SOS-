@@ -6,7 +6,7 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
  const getFetch=fetchFn||((...x)=>fetch(...x));
  const Socket=WebSocketCtor||globalThis.WebSocket;
  const now=clock||(()=>performance.now());
- let token=null,socket=null,seq=0;
+ let token=null,socket=null,seq=0,localTicket=null,ticketExpiresAt=0;
  let state={state:'disconnected',source:'none',host:null,scribe:null,rttMs:null,reason:'Not connected'};
  const pending=new Map(),listeners=new Set();
  const snapshot=()=>({...state,host:state.host?{...state.host}:null,scribe:state.scribe?{...state.scribe}:null});
@@ -23,7 +23,7 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   }finally{clearTimeout(timer)}
  }
  function disconnect(){
-  const old=socket;socket=null;token=null;
+  const old=socket;socket=null;token=null;localTicket=null;ticketExpiresAt=0;
   if(old){try{old.close(1000,'User detached')}catch{}}
   for(const [id,p] of pending){clearTimeout(p.timer);p.reject(new Error('Bridge disconnected'));pending.delete(id)}
   update({state:'disconnected',source:'none',host:null,scribe:null,rttMs:null,reason:'User detached'});
@@ -57,6 +57,9 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
     });
    });
    update({state:'connected',source:'authenticated-localhost',host,reason:null});
+   // The runtime ticket is requested automatically after successful local pairing.
+   // A missing Ollama service never interrupts unrelated terminal functionality.
+   void getRuntimeTicket().catch(()=>{});
    return snapshot();
   }catch(err){disconnect();update({state:'error',reason:String(err?.message||err)});throw err}
  }
@@ -137,7 +140,106 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   if(!['gaia_runtime_status','gaia_comms_status'].includes(name))throw new TypeError('Unknown MCP adapter read');
   return writeMount('/v1/mcp/adapter/call',{name});
  }
+
+ async function getRuntimeTicket(){
+  if(!token||state.state!=='connected')throw new Error('Pair local Quine mesh first');
+  if(localTicket && Date.now()+45000<ticketExpiresAt)return localTicket;
+  const issued=await read('/v1/ai/runtime/ticket');
+  if(issued.scope!=='local-inference'||typeof issued.ticket!=='string'||
+     !Number.isSafeInteger(issued.expires_in)||issued.expires_in<60)
+    throw new Error('Invalid local runtime ticket');
+  localTicket=issued.ticket;
+  ticketExpiresAt=Date.now()+issued.expires_in*1000;
+  return localTicket;
+ }
+ async function localAIStatus(){return read('/v1/ai/runtime/status')}
+ async function decodeLocalSeed(response){
+  const seed=response?.transport;
+  if(!seed||typeof seed.data!=='string')throw Error('Missing local response transport');
+  let plain;
+  if(seed.encoding==='utf8')plain=seed.data;
+  else if(seed.encoding==='gzip+base64'){
+   if(typeof DecompressionStream==='undefined')throw Error('This browser cannot decompress Gzip seeds');
+   const binary=atob(seed.data),bytes=Uint8Array.from(binary,ch=>ch.charCodeAt(0));
+   const readable=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+   const decoded=await new Response(readable).arrayBuffer();
+   if(decoded.byteLength>30000)throw Error('Decoded response budget exceeded');
+   plain=new TextDecoder().decode(decoded);
+  }else throw Error('Unknown local response encoding');
+  const bytes=new TextEncoder().encode(plain);
+  if(bytes.byteLength!==seed.bytes ||bytes.byteLength>30000)throw Error('Seed size mismatch');
+  if(typeof seed.sha256==='string'&&globalThis.crypto?.subtle){
+   const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);
+   const actual=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+   if(actual!==seed.sha256)throw Error('Seed content hash mismatch');
+  }
+  return {...response,text:plain,transport:{encoding:seed.encoding,
+    bytes:seed.bytes,transport_bytes:seed.transport_bytes,sha256:seed.sha256}};
+ }
+ async function localAIChat(prompt,context='',maxTokens=256){
+  if(typeof prompt!=='string'||!prompt.trim()||prompt.length>3200)throw TypeError('Prompt 1-3200 characters');
+  if(typeof context!=='string'||context.length>6000)throw TypeError('Context exceeds 6000 characters');
+  if(!Number.isSafeInteger(maxTokens)||maxTokens<16||maxTokens>1024)throw TypeError('Output budget 16-1024');
+  const ticket=await getRuntimeTicket();
+  const response=await writeMount('/v1/ai/runtime/chat',{ticket,prompt,context,maxTokens});
+  return decodeLocalSeed(response);
+ }
+ async function localAIStream(prompt,onFrame,{context='',maxTokens=256}={}){
+  if(typeof onFrame!=='function')throw TypeError('Frame callback required');
+  if(typeof prompt!=='string'||!prompt.trim()||prompt.length>3200)throw TypeError('Prompt 1-3200 characters');
+  if(typeof context!=='string'||context.length>6000)throw TypeError('Context exceeds 6000 characters');
+  if(!Number.isSafeInteger(maxTokens)||maxTokens<16||maxTokens>1024)throw TypeError('Output budget 16-1024');
+  const ticket=await getRuntimeTicket(),abort=new AbortController(),timer=setTimeout(()=>abort.abort(),102000);
+  let completed=false,chars=0,final=null;
+  try{
+   const response=await getFetch(HOST+'/v1/ai/runtime/stream',{method:'POST',
+    headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({ticket,prompt,context,maxTokens}),signal:abort.signal,
+    cache:'no-store',credentials:'omit',mode:'cors'});
+   if(!response.ok ||!response.body)throw Error('Local streaming service HTTP '+response.status);
+   const reader=response.body.getReader(),decoder=new TextDecoder();
+   let buffer='';
+   while(true){
+    const {done,value}=await reader.read();if(done)break;
+    buffer+=decoder.decode(value,{stream:true});
+    if(buffer.length>65536)throw Error('Oversized local streaming frame');
+    let index;
+    while((index=buffer.indexOf('\n'))>=0){
+     const line=buffer.slice(0,index).trim();buffer=buffer.slice(index+1);
+     if(!line)continue;
+     const event=JSON.parse(line);
+     if(event.type==='delta'){
+      if(typeof event.text!=='string')throw Error('Invalid text delta');
+      chars+=event.text.length;
+      if(chars>20000)throw Error('Local output budget exceeded');
+      onFrame(event);
+     }else if(event.type==='done'){completed=true;final=event;onFrame(event)}
+     else if(event.type==='error')throw Error('Local Ollama runtime unavailable');
+    }
+   }
+   if(!completed)throw Error('Stream ended without model completion');
+   return final;
+  }finally{clearTimeout(timer)}
+ }
+ async function localPDF(file){
+  if(!file ||typeof file.size!=='number'||file.size<5||file.size>8*1024*1024)
+   throw TypeError('PDF size must be <=8MiB');
+  const ticket=await getRuntimeTicket(),abort=new AbortController(),timer=setTimeout(()=>abort.abort(),35000);
+  try{
+   const r=await getFetch(HOST+'/v1/ai/runtime/pdf',{method:'POST',
+    headers:{Authorization:'Bearer '+token,'X-GAIA-Runtime-Ticket':ticket,
+      'Content-Type':'application/pdf'},
+    body:file,signal:abort.signal,cache:'no-store',credentials:'omit',mode:'cors'});
+   if(!r.ok)throw Error('Local PDF extraction HTTP '+r.status);
+   const result=await r.json();
+   if(result?.source!=='host-local-extraction'||result.cloud_uploaded!==false)
+    throw Error('Unexpected PDF processing response');
+   return result;
+  }finally{clearTimeout(timer)}
+ }
+
  return {connect,disconnect,ping,scribeStatus,scribeSearch,xaiCardStatus,xaiCardHistory,xaiCardChat,
+  getRuntimeTicket,localAIStatus,localAIChat,localAIStream,localPDF,
   runtimeStatus,runtimeResult,runtimeSubmit,mcpCatalog,mcpRead,
   listMounts,cloneMount,linkMount,status:snapshot,
   subscribe(cb){if(typeof cb!=='function')throw new TypeError('Callback required');
