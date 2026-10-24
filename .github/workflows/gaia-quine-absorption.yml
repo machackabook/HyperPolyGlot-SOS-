@@ -1,0 +1,30 @@
+name: GAIA Quine Absorption Contracts
+on:
+  push:
+    paths:
+      - 'public/gaia-absorption-quine.html'
+      - 'src/services/gaiaMeshSyncV4.mjs'
+      - 'src/components/GaiaAbsorptionLauncher.tsx'
+      - 'src/App.tsx'
+      - 'src/components/HyperTerminal.tsx'
+      - 'tests/gaia-absorption-quine.test.mjs'
+      - '.github/workflows/gaia-quine-absorption.yml'
+  pull_request:
+    paths:
+      - 'public/gaia-absorption-quine.html'
+      - 'src/services/gaiaMeshSyncV4.mjs'
+      - 'tests/gaia-absorption-quine.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quine-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify offline archive save and replay
+        run: node --test tests/gaia-absorption-quine.test.mjs
