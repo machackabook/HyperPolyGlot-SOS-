@@ -1,0 +1,39 @@
+name: NEXUS Per-System Pages Contracts
+on:
+  push:
+    paths:
+      - 'src/services/nexusSystemRouter.mjs'
+      - 'src/services/gaiaMeshSyncV4.mjs'
+      - 'src/components/NexusSystemPages.tsx'
+      - 'src/components/HyperTerminal.tsx'
+      - 'src/App.tsx'
+      - 'tests/nexus-system-pages.test.mjs'
+      - '.github/workflows/nexus-system-pages.yml'
+  pull_request:
+    paths:
+      - 'src/services/nexusSystemRouter.mjs'
+      - 'src/services/gaiaMeshSyncV4.mjs'
+      - 'src/components/NexusSystemPages.tsx'
+      - 'src/components/HyperTerminal.tsx'
+      - 'src/App.tsx'
+      - 'tests/nexus-system-pages.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  routed-instance-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run executable page, host-scope and node-graph contracts
+        run: node --test tests/nexus-system-pages.test.mjs
+      - name: Validate router and graph module syntax
+        run: |
+          node --check src/services/nexusSystemRouter.mjs
+          node --check src/services/gaiaMeshSyncV4.mjs
