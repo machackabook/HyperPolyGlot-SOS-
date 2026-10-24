@@ -22,6 +22,8 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
  const [selected,setSelected]=useState<SceneNode|null>(null);
  const [view,setView]=useState<ViewStatus>({fps:0,renderNodes:0,sourceLinks:0,peerStatus:'not-connected'});
  const [paused,setPaused]=useState(false);
+ const [meshRevision,setMeshRevision]=useState(gaiaMeshV4.snapshot().revision);
+ useEffect(()=>gaiaMeshV4.subscribe((next:any)=>setMeshRevision(next.revision)),[]);
  const pausedRef=useRef(false);
  useEffect(()=>{pausedRef.current=paused},[paused]);
  const [rotation,setRotation]=useState({yaw:0,pitch:0});
@@ -187,7 +189,7 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
      geometries.forEach(x=>x.dispose());materials.forEach(x=>x.dispose());
      renderer.dispose();renderer.domElement.remove();world.current=null;
    };
- },[]); // Animation pauses without rebuilding WebGL resources.
+ },[meshRevision]); // Recreate this bounded layer only when source graph metadata changes.
  return <section className="relative mt-4 overflow-hidden rounded-2xl border border-cyan-400/40 bg-[#01030a]">
    <div className="absolute left-3 top-3 z-10 max-w-[72%] pointer-events-none">
      <p className="text-xs font-semibold tracking-widest text-amber-200">ETHERNET · INTERACTIVE CROSSVOID</p>
