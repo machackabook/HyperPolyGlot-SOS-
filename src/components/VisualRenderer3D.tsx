@@ -1377,13 +1377,13 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       ctx.textAlign = 'left';
       ctx.fillStyle = `${activePrimary}88`;
       ctx.font = 'bold 9px "Orbitron", sans-serif';
-      ctx.fillText('PHYSICAL NODE TRACKER', 24, 28);
+      ctx.fillText('TERRASPHERE · BROWSER FIX (NOT ATTESTED)', 24, 28);
       ctx.font = '8px "JetBrains Mono", monospace';
       ctx.fillStyle = '#ffffffaa';
-      ctx.fillText(`LAT: ${geoTelemetry.lat.toFixed(6)}`, 24, 40);
-      ctx.fillText(`LNG: ${geoTelemetry.lng.toFixed(6)}`, 24, 50);
+      ctx.fillText(`LAT: ${geoTelemetry.lat.toFixed(2)}`, 24, 40);
+      ctx.fillText(`LNG: ${geoTelemetry.lng.toFixed(2)}`, 24, 50);
       ctx.fillStyle = `${activeSecondary}aa`;
-      ctx.fillText(`PLUS: ${geoTelemetry.plusCode}`, 24, 60);
+      ctx.fillText(`ACCURACY: ${geoTelemetry.accuracyMeters?.toFixed(0) || 'unknown'}m · SESSION-ONLY`, 24, 60);
     }
 
     // Solfeggio indicator
