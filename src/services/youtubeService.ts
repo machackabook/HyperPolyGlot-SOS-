@@ -212,12 +212,12 @@ export const CURATED_DYNAMIC_PLAYLISTS: YouTubePlaylist[] = [
 ];
 
 export const DEFAULT_GOOGLE_USER: GoogleUserProfile = {
-  email: 'machackabook@gmail.com',
-  name: 'Sovereign Operator (machackabook)',
-  picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-  isAuthenticated: true,
-  lastLogin: '2026-10-20T22:40:00Z',
-  accountType: 'sovereign_operator',
+  email: '',
+  name: 'Local YouTube Player',
+  picture: '',
+  isAuthenticated: false, // Never imply Google auth from a static fixture.
+  lastLogin: '',
+  accountType: 'guest',
   preferences: {
     defaultVideoMode: 'background',
     defaultOpacity: 0.85,
@@ -348,7 +348,7 @@ class YouTubeService {
           func,
           args,
         }),
-        '*'
+        'https://www.youtube-nocookie.com'
       );
     } catch {
       // Ignored for cross-origin security
@@ -395,20 +395,52 @@ class YouTubeService {
   /**
    * Persistence helpers for Google user preferences & custom playlists
    */
+  /**
+   * The terminal stores player preferences only. LocalStorage is not a Google
+   * OAuth session; a legacy "authenticated: true" value has no authority.
+   */
   public getStoredProfile(): GoogleUserProfile {
+    let saved: any = null;
     try {
-      const stored = localStorage.getItem('hyperterminal_google_profile');
-      if (stored) {
-        return JSON.parse(stored);
-      }
+      const raw = localStorage.getItem('hyperterminal_google_profile');
+      if (raw) saved = JSON.parse(raw);
     } catch {}
-    return DEFAULT_GOOGLE_USER;
+    const prefs = saved?.preferences && typeof saved.preferences === 'object'
+      ? saved.preferences : {};
+    return {
+      ...DEFAULT_GOOGLE_USER,
+      isAuthenticated: false,
+      email: '',
+      name: 'Local YouTube Player',
+      lastLogin: '',
+      accountType: 'guest',
+      preferences: { ...DEFAULT_GOOGLE_USER.preferences, ...prefs },
+    };
   }
 
   public saveStoredProfile(profile: GoogleUserProfile): void {
     try {
-      localStorage.setItem('hyperterminal_google_profile', JSON.stringify(profile));
+      localStorage.setItem('hyperterminal_google_profile',
+        JSON.stringify({ preferences: profile.preferences }));
     } catch {}
+  }
+
+  /** The real account and any login remain owned by YouTube in a top-level tab. */
+  public getNativeWatchUrl(target: { videoId?: string; playlistId?: string } = {}): string {
+    const video = target.videoId;
+    const list = target.playlistId;
+    if (video && !/^[A-Za-z0-9_-]{11}$/.test(video)) throw new TypeError('Invalid video ID');
+    if (list && !/^[A-Za-z0-9_-]{12,150}$/.test(list)) throw new TypeError('Invalid playlist ID');
+    const url = new URL('https://www.youtube.com/');
+    if (video) {
+      url.pathname = '/watch';
+      url.searchParams.set('v', video);
+      if (list) url.searchParams.set('list', list);
+    } else if (list) {
+      url.pathname = '/playlist';
+      url.searchParams.set('list', list);
+    }
+    return url.toString();
   }
 
   public getStoredCustomPlaylists(): YouTubePlaylist[] {
