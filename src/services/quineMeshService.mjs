@@ -122,7 +122,24 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   return writeMount('/v1/xai/card/chat',body);
  }
 
- return {connect,disconnect,ping,scribeStatus,scribeSearch,xaiCardStatus,xaiCardHistory,xaiCardChat,listMounts,cloneMount,linkMount,status:snapshot,
+ async function runtimeStatus(){return read('/v1/runtime/status')}
+ async function runtimeResult(jobId){
+  if(typeof jobId!=='string'||!/^[a-f0-9]{32}$/.test(jobId))throw new TypeError('Bad runtime job id');
+  return read('/v1/runtime/jobs/'+jobId)
+ }
+ async function runtimeSubmit(kind,payload={}){
+  if(!['digest','symplectic','relations'].includes(kind))throw new TypeError('Unknown bounded compute');
+  if(!payload||typeof payload!=='object'||Array.isArray(payload))throw new TypeError('Invalid job payload');
+  return writeMount('/v1/runtime/jobs',{kind,payload});
+ }
+ async function mcpCatalog(){return read('/v1/mcp/catalog')}
+ async function mcpRead(name){
+  if(!['gaia_runtime_status','gaia_comms_status'].includes(name))throw new TypeError('Unknown MCP adapter read');
+  return writeMount('/v1/mcp/adapter/call',{name});
+ }
+ return {connect,disconnect,ping,scribeStatus,scribeSearch,xaiCardStatus,xaiCardHistory,xaiCardChat,
+  runtimeStatus,runtimeResult,runtimeSubmit,mcpCatalog,mcpRead,
+  listMounts,cloneMount,linkMount,status:snapshot,
   subscribe(cb){if(typeof cb!=='function')throw new TypeError('Callback required');
    listeners.add(cb);return()=>listeners.delete(cb)}};
 }
