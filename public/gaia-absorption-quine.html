@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>GAIA · Absorption Quine Forge</title>
+<style>
+:root{color-scheme:dark;--bg:#02050b;--cyan:#00e5ff;--gold:#ffcc00;--purple:#9932cc}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(ellipse at 50% 23%,#122044,#02050b 75%);color:#e6f6ff;font:14px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+main{max-width:980px;padding:clamp(16px,3vw,32px);margin:auto}h1{margin:0;color:var(--cyan);font-size:clamp(22px,4vw,35px);letter-spacing:.03em}h2{font-size:15px;color:var(--gold);margin:0 0 9px}
+.kicker{color:#e0b3ff;font-size:11px;letter-spacing:.22em}
+.lead{max-width:760px;color:#c1d6e7}.layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(265px,1fr);gap:16px}
+.panel{border:1px solid #285674;background:#061325e6;border-radius:16px;padding:18px;box-shadow:0 12px 42px #0007;backdrop-filter:blur(10px)}
+textarea{display:block;width:100%;min-height:260px;resize:vertical;padding:14px;border-radius:12px;background:#010a16;color:#dffbff;border:1px solid #255574;font:12px/1.6 ui-monospace,monospace;white-space:pre;tab-size:2}
+button{font:inherit;padding:8px 12px;background:#0a253d;color:#e8fbff;border:1px solid #157c9a;border-radius:9px;cursor:pointer}
+button:hover,button:focus-visible{background:#123d5b;outline:1px solid var(--cyan)}
+button:disabled{opacity:.5;cursor:not-allowed}.gold{border-color:#997600;color:#ffe597}.red{border-color:#6a3746;color:#ffb2c2}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.notice{margin:12px 0;color:#a8f5d1;overflow-wrap:anywhere}.muted{color:#8fa7bc;font-size:12px}.archive{max-height:310px;overflow:auto;list-style:none;margin:0;padding:0}
+.archive li{border-bottom:1px solid #1c3b57;padding:9px 3px;display:flex;align-items:start;justify-content:space-between;gap:9px}
+.archive .title{font-size:12px;color:#d9effc;overflow-wrap:anywhere}
+.archive button{font-size:11px;padding:5px 8px;flex-shrink:0}svg{max-width:100%;height:auto}.links line{stroke:var(--cyan);stroke-width:1.8;opacity:.47}.links circle{fill:#00e5ff;opacity:.76}
+.node{fill:#0a1d32;stroke:#559dc8;stroke-width:1.4}.nodeTxt{fill:#d8f4ff;font:12px ui-monospace,monospace;text-anchor:middle}
+.footer{font-size:11px;color:#96adba;margin-top:14px}
+@media(max-width:740px){.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<div class="kicker">CRYPTIC NEWS · HYPERPOLYGLOT · VERSION 1.0</div>
+<h1>⚛ GAIA ABSORPTION QUINE FORGE</h1>
+<p class="lead">An offline-capable living HTML artifact. Append source text, verify its SHA-256, then export a new self-contained copy carrying its own inert archive. <strong>Imported text is never executed.</strong></p>
+<div class="layout">
+<section class="panel">
+<h2>01 · Source ingestion</h2>
+<label for="code-input" class="muted">Source / notebook excerpt / document text (32 KiB per entry; avoid secrets and personal data)</label>
+<textarea id="code-input" spellcheck="false" placeholder="Paste code, notes, or an artifact fragment to preserve as data..."></textarea>
+<div class="controls">
+<button type="button" id="absorb-button" class="gold">Absorb &amp; Evolve</button>
+<button type="button" id="save-button">Save self-contained HTML</button>
+<button type="button" id="export-json-button">Export archive JSON</button>
+</div>
+<div class="controls">
+<label class="muted" for="import-archive">Read back archive (JSON only): </label>
+<input id="import-archive" type="file" accept=".json,application/json">
+<button type="button" id="clear-button" class="red">Clear archive</button>
+</div>
+<div class="notice" role="status" id="status">Initializing archive verification…</div>
+<p class="muted" id="metrics">Integrity not checked.</p>
+</section>
+<section class="panel">
+<h2>02 · Neural link mesh</h2>
+<svg viewBox="0 0 460 226" role="img" aria-label="Tethered graph: source, hash, archive, replay and exported HTML">
+<g class="links">
+<line x1="89" y1="111" x2="225" y2="38"/><line x1="225" y1="38" x2="367" y2="112"/>
+<line x1="367" y1="112" x2="225" y2="193"/><line x1="225" y1="193" x2="89" y2="111"/>
+<line x1="225" y1="38" x2="225" y2="193"/><line x1="89" y1="111" x2="367" y2="112"/>
+</g>
+<g><rect class="node" x="18" y="86" width="142" height="52" rx="11"/><text class="nodeTxt" x="89" y="107">SOURCE</text><text class="nodeTxt" x="89" y="121">inert text</text>
+<rect class="node" x="154" y="12" width="142" height="52" rx="11"/><text class="nodeTxt" x="225" y="33">VERIFY</text><text class="nodeTxt" x="225" y="47">SHA-256</text>
+<rect class="node" x="297" y="87" width="142" height="52" rx="11"/><text class="nodeTxt" x="368" y="108">ARCHIVE</text><text class="nodeTxt" x="368" y="122">JSON + UTF-8</text>
+<rect class="node" x="154" y="168" width="142" height="52" rx="11"/><text class="nodeTxt" x="225" y="189">REPLAY</text><text class="nodeTxt" x="225" y="203">portable HTML</text></g>
+</svg>
+<h2>03 · Saved engrams</h2>
+<ol class="archive" id="archive-list"></ol>
+<p class="muted">Stored content is intentionally inert. The mesh illustrates dependencies; it does not claim external connectivity or computational nodes.</p>
+</section>
+</div>
+<div class="footer">GAIA · QUINE ARTIFACT • Local browser storage is not a backup. Download a new HTML after each update. Base64 is encoding, not encryption. No API calls, microphones, GPS, or external credentials are embedded.</div>
+</main>
+<script id="nexus-code-archive" type="application/json">[]</script>
+<script>
+'use strict';
+(function(){
+  const MAX_ENTRIES=32,MAX_ENTRY_BYTES=32768,MAX_TOTAL_BYTES=262144;
+  const storage=document.getElementById('nexus-code-archive');
+  const codeBox=document.getElementById('code-input');
+  const status=document.getElementById('status');
+  const list=document.getElementById('archive-list');
+  const metrics=document.getElementById('metrics');
+  let codeArchive=[];
+  let busy=false;
+  const notify=(message)=>{status.textContent=message};
+  const hex=(bytes)=>Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
+  const hash=async(bytes)=>hex(await crypto.subtle.digest('SHA-256',bytes));
+  const toB64=(bytes)=>{
+    let raw='';for(const byte of bytes)raw+=String.fromCharCode(byte);
+    return btoa(raw);
+  };
+  const fromB64=(value)=>{
+    const raw=atob(value);
+    return Uint8Array.from(raw,ch=>ch.charCodeAt(0));
+  };
+  const totalBytes=(rows)=>rows.reduce((sum,row)=>sum+row.bytes,0);
+  function validateShape(rows){
+    if(!Array.isArray(rows)||rows.length>MAX_ENTRIES)throw Error('Archive entry cap exceeded');
+    let total=0;
+    for(const row of rows){
+      if(!row||typeof row!=='object'||typeof row.id!=='string'||!(/^[0-9a-f]{32}$/).test(row.id)||
+        !Number.isSafeInteger(row.timestamp)||row.timestamp<0||
+        typeof row.b64!=='string'||row.b64.length>MAX_ENTRY_BYTES*2||
+        typeof row.sha256!=='string'||!(/^[0-9a-f]{64}$/).test(row.sha256)||
+        !Number.isSafeInteger(row.bytes)||row.bytes<1||row.bytes>MAX_ENTRY_BYTES)throw Error('Malformed archive record');
+      total+=row.bytes;
+      if(total>MAX_TOTAL_BYTES)throw Error('Archive total byte cap exceeded');
+    }
+    if(new Set(rows.map(row=>row.id)).size!==rows.length)throw Error('Duplicate IDs');
+    return rows;
+  }
+  async function verifyArchive(rows){
+    validateShape(rows);
+    for(const row of rows){
+      const bytes=fromB64(row.b64);
+      if(bytes.length!==row.bytes||await hash(bytes)!==row.sha256)
+        throw Error('Archive checksum/read-back failed');
+    }
+    return rows;
+  }
+  function serialize(){
+    // Script elements are raw-text HTML: literal "<" MUST be escaped.
+    // JSON stringification is safe only after '<' is converted to a JSON escape.
+    storage.textContent=JSON.stringify(codeArchive).replace(/</g,'\\u003c');
+  }
+  function paint(){
+    list.replaceChildren();
+    for(const row of codeArchive.slice().reverse()){
+      const li=document.createElement('li');
+      const label=document.createElement('span');
+      label.className='title';
+      label.textContent=new Date(row.timestamp).toLocaleString()+' · '+row.bytes+' bytes · '+row.sha256.slice(0,12);
+      const open=document.createElement('button');
+      open.type='button';open.textContent='Read back';open.addEventListener('click',async()=>{
+        try{
+          await verifyArchive([row]);
+          codeBox.value=new TextDecoder('utf-8',{fatal:true}).decode(fromB64(row.b64));
+          notify('SHA-256 verified: archived source restored to the editor.');
+        }catch(err){notify('Read-back rejected: '+err.message)}
+      });
+      li.append(label,open);list.appendChild(li);
+    }
+    if(!codeArchive.length){
+      const empty=document.createElement('li');
+      empty.textContent='Archive empty · zero payload';
+      list.appendChild(empty);
+    }
+    metrics.textContent=codeArchive.length+' / '+MAX_ENTRIES+' archived · '+totalBytes(codeArchive)+
+      ' / '+MAX_TOTAL_BYTES+' source bytes · Verified local hash records';
+  }
+  async function absorbAndEvolve(){
+    if(busy)return;
+    const text=codeBox.value;
+    if(!text){notify('The void requires input.');return}
+    busy=true;
+    try{
+      const bytes=new TextEncoder().encode(text);
+      if(bytes.length>MAX_ENTRY_BYTES)throw Error('Input exceeds '+MAX_ENTRY_BYTES+' bytes');
+      const random=new Uint8Array(16);crypto.getRandomValues(random);
+      const row={id:hex(random),timestamp:Date.now(),b64:toB64(bytes),
+        sha256:await hash(bytes),bytes:bytes.length};
+      const next=[...codeArchive,row];
+      await verifyArchive(next);
+      codeArchive=next;
+      serialize();paint();
+      notify('Absorbed '+bytes.length+' bytes. Integrity verified. Save HTML to persist across devices.');
+    }catch(err){notify('Absorption rejected: '+err.message)}
+    finally{busy=false}
+  }
+  function download(content,name,mime){
+    const url=URL.createObjectURL(new Blob([content],{type:mime}));
+    const a=document.createElement('a');
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+  async function saveSelf(){
+    if(busy)return;
+    busy=true;
+    try{
+      await verifyArchive(codeArchive);
+      serialize();
+      const documentText='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+      download(documentText,'gaia_absorption_quine_v'+codeArchive.length+'.html','text/html;charset=utf-8');
+      notify('Self-contained HTML exported. Reopen the file to verify that each entry survived.');
+    }catch(err){notify('Export rejected: '+err.message)}
+    finally{busy=false}
+  }
+  function exportJSON(){
+    download(JSON.stringify(codeArchive,null,2),'gaia_absorption_archive.json','application/json;charset=utf-8');
+    notify('Archive JSON exported. It is plain text and may contain private material.');
+  }
+  async function importJSON(file){
+    if(!file||file.size>800000)throw Error('Archive JSON exceeds byte budget');
+    const incoming=JSON.parse(await file.text());
+    await verifyArchive(incoming);
+    codeArchive=incoming.map(row=>({id:row.id,timestamp:row.timestamp,
+      b64:row.b64,sha256:row.sha256,bytes:row.bytes}));
+    serialize();paint();notify('Imported '+codeArchive.length+' records; all SHA-256 digests verified.');
+  }
+  async function boot(){
+    try{
+      if(!crypto||!crypto.subtle||!crypto.getRandomValues)throw Error('Secure browser cryptography unavailable');
+      const parsed=JSON.parse(storage.textContent||'[]');
+      await verifyArchive(parsed);
+      codeArchive=parsed;
+      serialize();paint();
+      notify('Archive verified · '+codeArchive.length+' entries · no external network required.');
+    }catch(err){
+      notify('READ-ONLY ERROR: '+err.message+' — archive has not been changed.');
+      document.getElementById('absorb-button').disabled=true;
+      document.getElementById('save-button').disabled=true;
+      document.getElementById('clear-button').disabled=true;
+    }
+  }
+  document.getElementById('absorb-button').addEventListener('click',absorbAndEvolve);
+  document.getElementById('save-button').addEventListener('click',saveSelf);
+  document.getElementById('export-json-button').addEventListener('click',exportJSON);
+  document.getElementById('clear-button').addEventListener('click',()=>{
+    if(!confirm('Clear archived entries from this in-memory artifact? Existing downloaded copies are not affected.'))return;
+    codeArchive=[];serialize();paint();notify('Archive cleared in memory; previous downloaded versions remain unchanged.');
+  });
+  document.getElementById('import-archive').addEventListener('change',async(event)=>{
+    try{await importJSON(event.target.files[0])}catch(err){notify('Import rejected: '+err.message)}
+    finally{event.target.value=''}
+  });
+  boot();
+})();
+</script>
+</body>
+</html>
