@@ -82,7 +82,7 @@ const BUILTIN_COMMANDS = [
   'tree', 'find', 'grep', 'vfs', 'render', 'sentiment', 'color', 'gravity',
   'speed', 'turbulence', 'burst', 'calm', 'shatter', 'gemini', 'ask', 'ai',
   'voice', 'speak', 'mic', 'listen', 'wakeword', '963', 'node', 'js', 'git', 'singularity', 'satcom',
-  'swarm', 'arbitrage', 'voip', 'mcp', 'macro', 'quine', 'telemetry', 'date', 'uptime',
+  'swarm', 'arbitrage', 'voip', 'mcp', 'ollama', 'macro', 'quine', 'telemetry', 'date', 'uptime',
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
@@ -519,6 +519,11 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         appendLine(`ls: ${e.message}`, 'error');
         return;
       }
+    } else if (firstCmd === 'ollama' || firstCmd === 'ai') {
+      try {
+        const answer=await quineMeshService.localAIChat(firstArgs.join(' '),'',256);
+        currentStream=answer.text;
+      } catch(e:any){appendLine('Local pipeline AI unavailable: '+String(e?.message||e),'error');return}
     } else if (firstCmd === 'history') {
       currentStream = activeInstance.history.join('\n');
     } else if (firstCmd === 'echo') {
@@ -550,6 +555,14 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
     // Pass stream sequentially through remaining pipeline stages
     for (let i = 1; i < stages.length; i++) {
       const stage = stages[i];
+      // Native pipethru, bounded and local: echo TEXT | ollama | grep pattern.
+      if (/^ollama(?:\s|$)/i.test(stage)) {
+        try {
+          const query=[stage.replace(/^ollama\s*/i,''),currentStream].filter(Boolean).join('\n').slice(0,3200);
+          currentStream=(await quineMeshService.localAIChat(query,'',256)).text;
+        }catch(e:any){appendLine('Ollama pipeline stage unavailable: '+String(e?.message||e),'error');return}
+        continue;
+      }
       const res = pipelineEngine.executeFilter(stage, currentStream);
       if (res.isError) {
         appendLine(res.output, 'error');
@@ -645,6 +658,49 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         audioVoiceService.announce(`Command ${raw} finished with status ${status}.`);
       }
     }
+  };
+
+  // GAIA local-first AI: actual host Ollama only, no simulated provider replies.
+  // Uses the already-paired local runtime ticket automatically.
+  const callLocalAI = async (promptText: string) => {
+    const trimmed = promptText.trim();
+    if (!trimmed) return;
+    if (quineMeshService.status().state !== 'connected') {
+      appendLine('Local AI unavailable: run mesh connect to pair an Ollama-enabled host. No paid provider was called.', 'system');
+      return;
+    }
+    setIsProcessing(true);
+    appendLine('GAIA local-first inference: Ollama runtime (authenticated localhost).', 'system');
+    try {
+      let sourceContext = '';
+      // Memory recall is opportunistic with a strict latency budget, not an approval gate.
+      const retrieval = quineMeshService.scribeSearch(trimmed.slice(0,256),3).catch(()=>null);
+      const data:any = await Promise.race([retrieval,new Promise<null>(resolve=>setTimeout(()=>resolve(null),150))]);
+      if (data && Array.isArray(data.results)) {
+        sourceContext = data.results.slice(0,3).filter((r:any)=>
+          typeof r.snippet==='string'&&typeof r.source_ref==='string')
+          .map((r:any)=>'[SOURCE '+String(r.source_id||'unverified').slice(0,80)+'] '+
+            String(r.source_ref).slice(0,180)+'\n'+r.snippet.slice(0,540)).join('\n\n');
+      }
+      const context=[engramsMarkdown,sourceContext].filter(Boolean).join('\n\n').slice(0,5500);
+      let pending='',received=0;
+      const final=await quineMeshService.localAIStream(trimmed,(event:any)=>{
+        if(event.type==='delta'){
+          pending+=event.text;received+=event.text.length;
+          if(pending.length>=140||pending.includes('\n')){
+            appendLine(pending,'ai');pending='';
+          }
+        }
+      },{context,maxTokens:384});
+      if(pending)appendLine(pending,'ai');
+      if(!received)throw Error('Model completed without text');
+      appendLine('[SOURCE] '+String(final?.model||'Ollama local')+
+        ' · tokens evaluated='+String(final?.eval_count??'not reported')+
+        ' · cloud API requests: 0', 'system');
+    } catch(e:any) {
+      appendLine('Local AI unavailable: '+String(e?.message||e)+
+        '. Install/start the configured Ollama model or use an explicitly authorized external provider.', 'error');
+    } finally { setIsProcessing(false); }
   };
 
   // Gemini Interactive Duplex Handler (natural conversation without requiring "gemini" prefix)
@@ -932,6 +988,11 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   ghmount list            : Show real local GitHub checkout mounts
   ghmount clone <m> <repo> : Clone an authorized GitHub owner/repo via local gh
   ghmount link <m> <url>  : Save HTTPS application link in private mount metadata
+  ai <prompt>             : Default Ollama inference via paired localhost (streamed)
+  ollama status           : Inspect real locally installed Ollama model availability
+  ollama ask <prompt>     : Explicit local response using session inference ticket
+  echo TEXT | ollama      : Feed bounded terminal pipeline text to local inference
+  gemini <prompt>         : Explicit external Gemini backend (separate provider auth)
   memory status           : Authenticated local Memory Fabric status
   memory recall <query>   : Source-indexed memory retrieval; cache for AI context
   scribe search <query>   : Existing local Scribe lookup
@@ -1420,9 +1481,26 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
       // ==========================================
       // AI CONVERSATION & IN-VISUAL VOICE
       // ==========================================
-      case 'gemini':
+      case 'ollama': {
+        const sub=(args[0]||'status').toLowerCase();
+        if(sub==='status'||sub==='models'){
+          try{appendLine(JSON.stringify(await quineMeshService.localAIStatus(),null,2),'output')}
+          catch(e:any){appendLine('Local Ollama unavailable: '+String(e?.message||e),'error')}
+        }else if(sub==='ask'){
+          await callLocalAI(args.slice(1).join(' '));
+        }else{
+          // Bare ollama text is also a local query.
+          await callLocalAI(argStr);
+        }
+        break;
+      }
       case 'ai':
       case 'ask': {
+        if (!argStr) { appendLine('Usage: ai <local prompt>', 'system');break; }
+        await callLocalAI(argStr);
+        break;
+      }
+      case 'gemini': {
         if (!argStr) {
           appendLine('Usage: gemini <your message or query>', 'error');
           break;
