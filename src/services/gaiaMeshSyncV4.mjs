@@ -38,6 +38,8 @@ const core=[
  ['nexus.calibration','adapter','Omni Calibrator','tools/omni_automation_matrix.py'],
  ['nexus.mcp','adapter','MCP Bridge','bridge/gaia_mcp_server.py'],
  ['nexus.localai','adapter','Ollama Runtime','bridge/gaia_local_ai.py'],
+ ['nexus.sensor','adapter','PLLM Sensor Agent','src/services/pllmSensorAgent.mjs'],
+ ['nexus.neutronality','core','Neutronality V15','src/services/gaiaNeutronalityV15.mjs'],
 ].map(([id,kind,title,path])=>({id,kind,title,sourceRef:ROOT+path,status:'declared'}));
 const connections=[
  ['nexus.scribe','nexus.memory','feeds'],
@@ -48,7 +50,11 @@ const connections=[
  ['nexus.core','nexus.mcp','routes'],
  ['nexus.mcp','nexus.localai','routes'],
  ['nexus.core','nexus.canvas','renders'],
- ['nexus.core','nexus.memory','recalls']
+ ['nexus.core','nexus.memory','recalls'],
+ ['nexus.sensor','nexus.neutronality','feeds'],
+ ['nexus.neutronality','nexus.memory','feeds'],
+ ['nexus.neutronality','nexus.canvas','renders'],
+ ['nexus.neutronality','nexus.sqe','validates']
 ].map(([from,to,type])=>({from,to,type}));
 export function createMeshRegistry(){
  let revision=0;
