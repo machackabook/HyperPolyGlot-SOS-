@@ -117,18 +117,18 @@ def create_app(token,scribe_port=8787):
  async def xai_chat(req):
   try:
    data=await req.json()
-   if not isinstance(data,dict) or set(data)-{'message','videoId','sessionId'}:
+   if not isinstance(data,dict) or set(data)-{'message','videoId','sessionId','provider'}:
     raise ValueError('Unexpected fields')
    result=await asyncio.to_thread(xai_cards.chat,
-     data.get('message'),data.get('videoId'),data.get('sessionId'))
+     data.get('message'),data.get('videoId'),data.get('sessionId'),None,data.get('provider','xai'))
    return web.json_response(result)
   except (ValueError,TypeError):
    raise web.HTTPBadRequest(text='Invalid X card prompt, video or session')
   except ProviderUnavailable:
-   raise web.HTTPServiceUnavailable(text='xAI SDK/model is not configured or unavailable on this host')
+   raise web.HTTPServiceUnavailable(text='Selected AI SDK/model is not configured or unavailable on this host')
   except Exception:
    # Never print or return exception details from the provider: may contain keys.
-   raise web.HTTPBadGateway(text='Real xAI provider request failed')
+   raise web.HTTPBadGateway(text='Real AI provider request failed')
 
  async def ws_handler(req):
   ws=web.WebSocketResponse(protocols=('quine-mesh-v1',),max_msg_size=2048,heartbeat=30)
