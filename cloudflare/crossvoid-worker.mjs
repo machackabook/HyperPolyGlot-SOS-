@@ -66,7 +66,7 @@ async function handle(req,env){
  const url=new URL(req.url),origin=req.headers.get('origin')||'';
  if(req.method==='OPTIONS'&&url.pathname.startsWith('/api/')){
   if(!ORIGINS.has(origin))return responseJson({error:'origin-not-allowed'},403);
-  const r=responseJson({},204,origin);
+  const r=new Response(null,{status:204,headers:{'access-control-allow-origin':origin,'vary':'Origin','cache-control':'no-store'}});
   r.headers.set('access-control-allow-methods','GET,POST,OPTIONS');
   r.headers.set('access-control-allow-headers','content-type');
   r.headers.set('access-control-max-age','300');
