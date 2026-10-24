@@ -4,6 +4,8 @@ import argparse, asyncio, hmac, json, os, platform, secrets, time, shutil
 from gaia_gh_mounts import list_mounts, link_website, clone_repo
 from xai_card_store import XaiCardStore, ProviderUnavailable
 from gaia_native_runtime import GAIARuntime, GAIA_TOOLS, comms_status
+from god_network_gate import GODGate
+from golden_army_forge import GoldenArmyForge
 from gaia_local_ai import RuntimeTickets, RuntimeUnavailable, ollama_status, ollama_seed, ollama_stream, extract_pdf_local
 from datetime import datetime, timezone
 from aiohttp import ClientSession, ClientTimeout, web
@@ -58,12 +60,14 @@ def create_app(token,scribe_port=8787):
  local_tokens=RuntimeTickets(lifespan=900)
  xai_cards=XaiCardStore()
  native_runtime=GAIARuntime(workers=2)
+ god=GODGate()
+ forge=GoldenArmyForge(gate=god,runtime=native_runtime)
  def status_data():
   return {'protocol':'quine-mesh-v1','status':'attached-localhost','source':'python-process-observed',
    'node_session':session,'os':platform.system(),'python':platform.python_version(),
    'process_id':os.getpid(),'uptime_seconds':round(time.monotonic()-started,3),
    'observed_at':datetime.now(timezone.utc).isoformat(),
-   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link','xai-card-status','xai-card-chat','xai-card-history','gaia-runtime-status','gaia-compute-jobs','gaia-mcp-adapter','gaia-local-ollama','gaia-runtime-ticket','gaia-local-pdf'],
+   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link','xai-card-status','xai-card-chat','xai-card-history','gaia-runtime-status','gaia-compute-jobs','gaia-mcp-adapter','gaia-local-ollama','gaia-runtime-ticket','gaia-local-pdf','god-policy-status','forge-plan','forge-compute','forge-guarded-github-read'],
    'remote_execution':False,'device_control':False,'privileged_authority':False,
    'gh_installed':bool(shutil.which('gh')),
    'capability_authorization':'paired-localhost-user-command-only'}
@@ -239,6 +243,49 @@ def create_app(token,scribe_port=8787):
   except RuntimeUnavailable:
    raise web.HTTPServiceUnavailable(text='Local PyMuPDF PDF extraction not available')
 
+ async def god_status(req):
+  return web.json_response(god.status())
+ async def god_decision(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'capability','destination'}:
+    raise ValueError('Invalid capability shape')
+   return web.json_response(god.decide(d.get('capability'),d.get('destination')))
+  except (TypeError,ValueError):
+   raise web.HTTPBadRequest(text='Invalid GOD policy request')
+ async def forge_status(req):
+  return web.json_response(forge.status())
+ async def forge_plan(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'capability','destination'}:
+    raise ValueError('Invalid forge plan')
+   if not isinstance(d.get('capability'),str) or len(d['capability'])>100:
+    raise ValueError('Invalid capability')
+   return web.json_response(forge.plan(d['capability'],d.get('destination')))
+  except (TypeError,ValueError):
+   raise web.HTTPBadRequest(text='Malformed forge capability plan')
+ async def forge_compute(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'kind','payload'}:
+    raise ValueError('Invalid forge computation')
+   result=forge.compute(d.get('kind'),d.get('payload') or {})
+   return web.json_response(result,status=202)
+  except (TypeError,ValueError):
+   raise web.HTTPBadRequest(text='Unsupported bounded computation')
+  except RuntimeError:
+   raise web.HTTPServiceUnavailable(text='Local Forge worker capacity reached')
+ async def forge_github_read(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'destination'} or not isinstance(d.get('destination'),str):
+    raise ValueError('Only GitHub repo metadata URLs are permitted')
+   result=await forge.public_github_read(d['destination'])
+   return web.json_response(result,status=200 if result.get('allowed') else 403)
+  except (TypeError,ValueError):
+   raise web.HTTPBadRequest(text='Invalid destination')
+
  async def ws_handler(req):
   ws=web.WebSocketResponse(protocols=('quine-mesh-v1',),max_msg_size=2048,heartbeat=30)
   await ws.prepare(req);await ws.send_json({'type':'attached','status':status_data()})
@@ -273,6 +320,12 @@ def create_app(token,scribe_port=8787):
  app.router.add_get('/v1/mounts',mount_list)
  app.router.add_post('/v1/mounts/clone',mount_clone)
  app.router.add_post('/v1/mounts/link',mount_link)
+ app.router.add_get('/v1/god/status',god_status)
+ app.router.add_post('/v1/god/decision',god_decision)
+ app.router.add_get('/v1/forge/status',forge_status)
+ app.router.add_post('/v1/forge/plan',forge_plan)
+ app.router.add_post('/v1/forge/compute',forge_compute)
+ app.router.add_post('/v1/forge/github/read',forge_github_read)
  app.router.add_get('/v1/runtime/status',runtime_status)
  app.router.add_post('/v1/runtime/jobs',runtime_submit)
  app.router.add_get('/v1/runtime/jobs/{job_id}',runtime_result)
