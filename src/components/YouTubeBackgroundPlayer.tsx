@@ -195,27 +195,10 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
     setCustomInput('');
   };
 
-  // Google Sign-In / Switch User handler
+  // Open actual YouTube. The embedding app does not own or fabricate login.
   const handleToggleGoogleAuth = () => {
-    const isCurrentlyAuth = yt.userProfile.isAuthenticated;
-    const nextAuth = !isCurrentlyAuth;
-    const updatedProfile: GoogleUserProfile = {
-      ...yt.userProfile,
-      isAuthenticated: nextAuth,
-      accountType: nextAuth ? 'sovereign_operator' : 'guest',
-      lastLogin: new Date().toISOString(),
-    };
-
-    setEnvState((prev) => ({
-      ...prev,
-      youtube: {
-        ...prev.youtube,
-        userProfile: updatedProfile,
-      },
-    }));
-
-    youtubeService.saveStoredProfile(updatedProfile);
-    setSaveToast(nextAuth ? 'Signed in with Google Account (machackabook@gmail.com)' : 'Signed out to Guest Mode');
+    window.open('https://www.youtube.com/', '_blank', 'noopener,noreferrer');
+    setSaveToast('YouTube opened separately; login and cookies remain managed by YouTube.');
     setTimeout(() => setSaveToast(null), 3500);
   };
 
@@ -592,11 +575,11 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <span>YOUTUBE NATIVE MUSIC & DYNAMIC PLAYLIST ENGINE</span>
                     <span className="px-2 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300 border border-red-500/40">
-                      GOOGLE AUTH LINKED
+                      YOUTUBE PLAYER · EXTERNAL ACCOUNT
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Log in natively to select dynamic video playlists and customize visual background rendering.
+                    Open real YouTube to use your own account. Background playback and local preferences work without impersonating Google login.
                   </p>
                 </div>
               </div>
@@ -676,7 +659,7 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
               >
                 <div className="w-4 h-4 rounded-full overflow-hidden border border-slate-700 shrink-0">
                   <img
-                    src={yt.userProfile.picture}
+                    src={yt.userProfile.picture || 'https://www.youtube.com/favicon.ico'}
                     alt={yt.userProfile.name}
                     className="w-full h-full object-cover"
                   />
@@ -1051,7 +1034,7 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
                     <div className="flex items-center gap-3.5">
                       <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]">
                         <img
-                          src={yt.userProfile.picture}
+                          src={yt.userProfile.picture || 'https://www.youtube.com/favicon.ico'}
                           alt={yt.userProfile.name}
                           className="w-full h-full object-cover"
                         />
@@ -1069,7 +1052,7 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
                         </div>
                         <p className="text-xs text-slate-300 font-mono">{yt.userProfile.email}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">
-                          Status: {yt.userProfile.isAuthenticated ? 'Authenticated & Active' : 'Guest Mode (Unlinked)'}
+                          Status: YouTube sign-in is managed in a separate YouTube tab
                         </p>
                       </div>
                     </div>
@@ -1087,12 +1070,12 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
                         {yt.userProfile.isAuthenticated ? (
                           <>
                             <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                            <span>DISCONNECT GOOGLE ID</span>
+                            <span>OPEN YOUTUBE ACCOUNT</span>
                           </>
                         ) : (
                           <>
                             <LogIn className="w-3.5 h-3.5 text-slate-900" />
-                            <span>SIGN IN WITH GOOGLE</span>
+                            <span>OPEN REAL YOUTUBE</span>
                           </>
                         )}
                       </button>
@@ -1107,7 +1090,7 @@ export const YouTubeBackgroundPlayer: React.FC<YouTubeBackgroundPlayerProps> = (
                         <span>Google User System Customizations</span>
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        Preferences are saved to your Google identity and applied dynamically.
+                        Preferences are saved locally in this browser, not to a Google account.
                       </span>
                     </div>
 
