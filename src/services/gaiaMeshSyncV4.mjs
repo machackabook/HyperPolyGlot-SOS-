@@ -45,6 +45,7 @@ const core=[
  ['nexus.terrasphere','adapter','TerraSphere Location Observation','src/services/geoNexusService.ts'],
  ['nexus.voip','adapter','Cryptic VoIP WebRTC','src/services/gaiaWebRTC.mjs'],
  ['nexus.invite','canvas','GAIA Shareable Invite','src/components/XYouTubeAICard.tsx'],
+ ['nexus.absorption','canvas','GAIA Absorption Quine Forge','public/gaia-absorption-quine.html'],
 ].map(([id,kind,title,path])=>({id,kind,title,sourceRef:ROOT+path,status:'declared'}));
 const connections=[
  ['nexus.scribe','nexus.memory','feeds'],
@@ -55,6 +56,9 @@ const connections=[
  ['nexus.core','nexus.mcp','routes'],
  ['nexus.mcp','nexus.localai','routes'],
  ['nexus.core','nexus.canvas','renders'],
+ ['nexus.core','nexus.absorption','routes'],
+ ['nexus.absorption','nexus.memory','references'],
+ ['nexus.absorption','nexus.canvas','renders'],
  ['nexus.core','nexus.memory','recalls'],
  ['nexus.sensor','nexus.neutronality','feeds'],
  ['nexus.neutronality','nexus.memory','feeds'],
