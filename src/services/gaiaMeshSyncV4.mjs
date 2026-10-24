@@ -43,6 +43,8 @@ const core=[
  ['nexus.god','core','GOD Network Capability Gate','bridge/god_network_gate.py'],
  ['nexus.forge','adapter','Golden Army Forge / Singularity','bridge/golden_army_forge.py'],
  ['nexus.terrasphere','adapter','TerraSphere Location Observation','src/services/geoNexusService.ts'],
+ ['nexus.voip','adapter','Cryptic VoIP WebRTC','src/services/gaiaWebRTC.mjs'],
+ ['nexus.invite','canvas','GAIA Shareable Invite','src/components/XYouTubeAICard.tsx'],
 ].map(([id,kind,title,path])=>({id,kind,title,sourceRef:ROOT+path,status:'declared'}));
 const connections=[
  ['nexus.scribe','nexus.memory','feeds'],
@@ -63,7 +65,10 @@ const connections=[
  ['nexus.forge','nexus.sqe','computes'],
  ['nexus.forge','nexus.memory','recalls'],
  ['nexus.forge','nexus.mcp','routes'],
- ['nexus.forge','nexus.canvas','renders']
+ ['nexus.forge','nexus.canvas','renders'],
+ ['nexus.voip','nexus.invite','routes'],
+ ['nexus.invite','nexus.core','routes'],
+ ['nexus.voip','nexus.god','references']
 ].map(([from,to,type])=>({from,to,type}));
 export function createMeshRegistry(){
  let revision=0;
