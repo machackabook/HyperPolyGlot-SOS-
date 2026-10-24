@@ -8,6 +8,8 @@ import { geoNexusService, GeoTelemetry } from '../services/geoNexusService';
 import { EarthNasaOverlay } from './EarthNasaOverlay';
 import { computeRgbLedState } from '../services/colorProfileService';
 import { causalCore } from '../services/causalCore.mjs';
+import { fragmentShader, vertexShader, librationMarkers, shaderPulseFromMetrics } from '../services/nexusCauldronscope.mjs';
+import { pllmSensorAgent } from '../services/pllmSensorAgent.mjs';
 import { axsResourceGovernor, octaveTrace } from '../services/axsResourceGovernor.mjs';
 import { useState } from 'react';
 
@@ -107,6 +109,31 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     });
     const torusMesh = new THREE.Mesh(torusGeo, torusMat);
     topologiesGroup.add(torusMesh);
+
+    // The Cauldronscope is a real GPU shader, not a fabricated telemetry layer.
+    // Pulse can be steered by an actual local SQE phase and opt-in frame samples.
+    const cauldronGeometry=new THREE.PlaneGeometry(85,85,12,12);
+    const cauldronMaterial=new THREE.ShaderMaterial({
+      vertexShader,fragmentShader,
+      uniforms:{
+        u_time:{value:0},
+        u_tensorPulse:{value:0},
+        u_accentColor:{value:new THREE.Color(0x00e5ff)}
+      },
+      transparent:true,depthWrite:false,
+      blending:THREE.AdditiveBlending,
+      side:THREE.DoubleSide
+    });
+    const cauldronPlane=new THREE.Mesh(cauldronGeometry,cauldronMaterial);
+    cauldronPlane.position.z=-48;
+    topologiesGroup.add(cauldronPlane);
+    const markerGeometry=new THREE.SphereGeometry(1.6,12,8);
+    const marker4Material=new THREE.MeshBasicMaterial({color:0xffcc00});
+    const marker5Material=new THREE.MeshBasicMaterial({color:0x00e5ff});
+    const marker4=new THREE.Mesh(markerGeometry,marker4Material);
+    const marker5=new THREE.Mesh(markerGeometry,marker5Material);
+    marker4.position.z=-37;marker5.position.z=-37;
+    topologiesGroup.add(marker4,marker5);
 
     // Exact mathematical octave trace: decorative geometry, no generated OS/physics telemetry.
     const tracePoints = Array.from({length:257}, (_,i) => {
@@ -830,6 +857,19 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       const ledState = currentEnv.rgbLed ? computeRgbLedState(t, currentEnv.rgbLed, smoothedAudio) : null;
       const targetCol = new THREE.Color(ledState ? ledState.primaryHex : currentEnv.primaryColor);
       const secondaryCol = new THREE.Color(ledState ? ledState.secondaryHex : currentEnv.secondaryColor);
+      const samples = pllmSensorAgent.summary().recent;
+      const observed = samples.length ? shaderPulseFromMetrics(samples[samples.length-1]) : 0;
+      const phasePulse = Math.min(1,Math.abs(sqePhase.p)/2);
+      const pulse = Math.max(observed,phasePulse);
+      cauldronMaterial.uniforms.u_time.value=t;
+      cauldronMaterial.uniforms.u_tensorPulse.value=pulse;
+      cauldronMaterial.uniforms.u_accentColor.value.copy(targetCol);
+      cauldronPlane.visible=currentEnv.topology==='torus';
+      const markers=librationMarkers(t*0.4,Math.max(0,Math.min(15,Math.round(pulse*15))));
+      marker4.visible=cauldronPlane.visible;
+      marker5.visible=cauldronPlane.visible;
+      marker4.position.set(markers.L4.x,markers.L4.y,-37);
+      marker5.position.set(markers.L5.x,markers.L5.y,-37);
 
       // Modulate lights & scene atmosphere
       if (ledState) {
@@ -1090,6 +1130,11 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
       renderer.dispose();
+      cauldronGeometry.dispose();
+      cauldronMaterial.dispose();
+      markerGeometry.dispose();
+      marker4Material.dispose();
+      marker5Material.dispose();
       torusGeo.dispose();
       torusMat.dispose();
       octaveGeometry.dispose();
