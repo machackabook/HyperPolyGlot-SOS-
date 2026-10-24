@@ -1,0 +1,48 @@
+name: GAIA Native MCP and Swarm Contracts
+on:
+  push:
+    paths:
+      - 'bridge/gaia_native_runtime.py'
+      - 'bridge/gaia_mcp_server.py'
+      - 'bridge/quine_local_bridge.py'
+      - 'src/services/gaiaCommsState.mjs'
+      - 'src/services/gaiaWebRTC.mjs'
+      - 'src/services/quineMeshService.mjs'
+      - 'tests/test_gaia_native_runtime.py'
+      - '.github/workflows/gaia-native-contracts.yml'
+  pull_request:
+    paths:
+      - 'bridge/gaia_native_runtime.py'
+      - 'bridge/gaia_mcp_server.py'
+      - 'bridge/quine_local_bridge.py'
+      - 'src/services/gaiaCommsState.mjs'
+      - 'src/services/gaiaWebRTC.mjs'
+      - 'src/services/quineMeshService.mjs'
+      - 'tests/test_gaia_native_runtime.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-local-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Python and JS parsing
+        run: |
+          python -m py_compile bridge/gaia_native_runtime.py bridge/gaia_mcp_server.py bridge/quine_local_bridge.py tests/test_gaia_native_runtime.py
+          node --check src/services/gaiaCommsState.mjs
+          node --check src/services/gaiaWebRTC.mjs
+          node --check src/services/quineMeshService.mjs
+      - name: Verify real local worker invariants
+        run: python -m unittest discover -s tests -p test_gaia_native_runtime.py -v
+      - name: Verify MCP v2 SDK server registration
+        run: |
+          python -m pip install 'mcp>=2,<3'
+          python -c "import sys; sys.path.insert(0, 'bridge'); from gaia_mcp_server import mcp; assert mcp is not None; print('MCP v2 server import OK')"
