@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+      - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -52,5 +52,5 @@ jobs:
         run: python -m unittest discover -s tests -p test_nexus_ouroboros_guard.py -v
       - name: Compile full HyperTerminal frontend
         run: |
-          npm ci
-          npm run build
+          bun install --frozen-lockfile
+          bun run build
