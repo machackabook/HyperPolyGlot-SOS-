@@ -1693,22 +1693,24 @@ Commands        : wakeword on | off | test | timeout <sec>`,
       // INTEGRATED HARDWARE / PLATFORM ENGINES
       // ==========================================
       case 'git': {
-        const sub = (args[0] || 'status').toLowerCase();
-        if (sub === 'status') {
-          appendLine(`On branch main
-Your branch is up to date with 'origin/main' (cryptichelped/MacBook_Mirror).
-Mounted drive: /mnt/nexus_drive (WebSocket Live Mirror port 8080)
-Working tree clean, 0 untracked files.`, 'output');
-        } else if (sub === 'log') {
-          appendLine(`commit c8f2a10 (HEAD -> main, origin/main)
-Author: cryptichelped <nexus@hyperterminal.os>
-Date:   ${new Date().toDateString()}
-    Unify 9 Aurora editions into Singularity Core masterwork
-
-commit b47e901
-    Mount /mnt/nexus_drive cloud storage bridge on port 8080`, 'table');
-        } else {
-          appendLine(`git: command '${sub}' synchronized with MacBook_Mirror:8080.`, 'success');
+        const sub=(args[0]||'status').toLowerCase();
+        if(sub==='open'){
+          window.open('https://github.com/machackabook/HyperPolyGlot-SOS-/', '_blank', 'noopener,noreferrer');
+          appendLine('Opened GitHub in an independent tab. Browser GitHub sign-in is not shared with the terminal.', 'system');
+        }else if(quineMeshService.status().state!=='connected'){
+          appendLine('Public guest mode: no GitHub account is authenticated by the page. For authorized host repositories, pair the Quine bridge with mesh connect.', 'system');
+        }else if(sub==='status'){
+          try{
+            const mounts=await quineMeshService.listMounts();
+            appendLine('Local host repository mount registry (not a Git working-tree status):', 'system');
+            appendLine(JSON.stringify(mounts,null,2), 'output');
+          }catch(e:any){
+            appendLine('Local Git mount status unavailable: '+String(e?.message||e),'error');
+          }
+        }else if(sub==='log'){
+          appendLine('Live Git history is not exposed by this public page. Run git log on an authorized host checkout.', 'system');
+        }else{
+          appendLine('git status | git log | git open — no implicit GitHub login or synthetic commits', 'system');
         }
         break;
       }
@@ -2591,7 +2593,7 @@ Usage: d3 stream | shape <force|streamgraph|radar|chord> | density <n> | speed <
             ...prev,
             youtube: { ...prev.youtube, showModal: true },
           }));
-          appendLine('Opened YouTube Neural Music & Dynamic Playlist Hub [Google Auth Linked].', 'system', '📺');
+          appendLine('Opened YouTube Neural Music & Dynamic Playlist Hub. The app starts in guest mode; YouTube sign-in is separate.', 'system', '📺');
         } else if (sub === 'play') {
           const query = args.slice(1).join(' ').trim();
           const target = query ? youtubeService.resolveTrack(query) : envState.youtube.currentTrack;
@@ -2769,29 +2771,23 @@ Customizations  :
   • Harmonic Res : ${profile.preferences.harmonicFrequency.toUpperCase()} Hz
   • Preferred Cat: ${profile.preferences.preferredCategory.toUpperCase()}`, 'table', '👤');
         } else if (sub === 'login' || sub === 'signin' || sub === 'logout') {
-          const isCurrentlyAuth = envState.youtube.userProfile.isAuthenticated;
-          const nextAuth = sub === 'logout' ? false : !isCurrentlyAuth;
-          const updated = {
-            ...envState.youtube.userProfile,
-            isAuthenticated: nextAuth,
-            accountType: nextAuth ? ('sovereign_operator' as const) : ('guest' as const),
-            lastLogin: new Date().toISOString(),
-          };
-          setEnvState((prev) => ({
-            ...prev,
-            youtube: {
-              ...prev.youtube,
-              userProfile: updated,
-            },
-          }));
-          youtubeService.saveStoredProfile(updated);
-          appendLine(
-            nextAuth
-              ? `Signed in with Google Account (${updated.email}). System customizations active.`
-              : 'Signed out of Google Account. Operating in Guest Mode.',
-            'success',
-            '🔑'
-          );
+          if(sub==='logout'){
+            // Reset only our guest display: the browser cannot sign users out of Google.
+            const updated={
+              ...envState.youtube.userProfile,
+              isAuthenticated:false,
+              email:'',
+              name:'Local YouTube Player',
+              accountType:'guest' as const,
+              lastLogin:'',
+            };
+            setEnvState(prev=>({...prev,youtube:{...prev.youtube,userProfile:updated}}));
+            youtubeService.saveStoredProfile(updated);
+            appendLine('Local profile reset to guest. This does not log you out of Google or GitHub.', 'system');
+          }else{
+            window.open('https://www.youtube.com/', '_blank', 'noopener,noreferrer');
+            appendLine('Opened real YouTube sign-in separately. No Google account is preselected or inherited by HyperTerminal.', 'system');
+          }
         } else if (sub === 'list') {
           appendLine('--- CURATED YOUTUBE MUSIC PRESETS ---', 'system');
           YOUTUBE_PRESET_TRACKS.forEach((t, i) => {
