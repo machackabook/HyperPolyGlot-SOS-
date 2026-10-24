@@ -87,7 +87,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync', 'device',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'page', 'pages', 'systems', 'axs', 'mesh', 'scribe', 'memory', 'ghmount'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'page', 'pages', 'systems', 'axs', 'mesh', 'scribe', 'memory', 'absorb', 'ghmount'
 ];
 
 export interface SentimentVisualConfig {
@@ -917,6 +917,20 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         else appendLine('mesh status | mesh connect | mesh ping | mesh disconnect','system');
         break;
       }
+      case 'absorb': {
+        const action=(args[0]||'open').toLowerCase();
+        if(action==='open'||action==='forge'||action==='quine'){
+          const artifactUrl=import.meta.env.BASE_URL+'gaia-absorption-quine.html';
+          // Browser-owned click navigation. No privileged bridge, auth, or execution.
+          const opened=window.open(artifactUrl,'_blank','noopener,noreferrer');
+          appendLine('GAIA Quine Forge: opened static self-exporting HTML artifact. Source is archived inertly; explicit download preserves state.', 'system');
+        }else if(action==='status'){
+          appendLine('Quine Forge: browser-local standalone HTML; bounded SHA-256 archive; saved state only in downloaded copies. No cloud account or live host code mutation.', 'system');
+        }else{
+          appendLine('absorb open | absorb status', 'system');
+        }
+        break;
+      }
       case 'memory': {
         const op = (args[0] || 'status').toLowerCase();
         if (quineMeshService.status().state !== 'connected') {
@@ -1024,6 +1038,8 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   gemini <prompt>         : Explicit external Gemini backend (separate provider auth)
   pages list              : List dedicated GAIA system pages
   page <slug>             : Open shareable system page without remounting terminal
+  absorb open             : Open standalone GAIA Quine Forge (self-serializing HTML)
+  absorb status           : Show local archive and export capability (no execution)
   memory status           : Authenticated local Memory Fabric status
   memory recall <query>   : Source-indexed memory retrieval; cache for AI context
   scribe search <query>   : Existing local Scribe lookup
