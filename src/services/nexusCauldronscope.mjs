@@ -21,7 +21,7 @@ export function librationMarkers(angle,bit4,{radius=32,centerX=0,centerY=0}={}){
  return {L4:point(angle+Math.PI/3),L5:point(angle-Math.PI/3),
   pulse,wobble,model:'stylized-libration-not-physical-orbit'};
 }
-export const vertexShader=String.raw\`
+export const vertexShader=String.raw`
  precision mediump float;
  uniform float u_time;
  uniform float u_tensorPulse;
@@ -31,8 +31,8 @@ export const vertexShader=String.raw\`
   vec3 transformed=position;
   transformed.z+=sin(position.y*4.0+u_time)*u_tensorPulse*1.8;
   gl_Position=projectionMatrix*modelViewMatrix*vec4(transformed,1.0);
- }\`;
-export const fragmentShader=String.raw\`
+ }`;
+export const fragmentShader=String.raw`
  precision mediump float;
  uniform vec3 u_accentColor;
  uniform float u_time;
@@ -42,7 +42,7 @@ export const fragmentShader=String.raw\`
    float wave=sin(vUv.x*10.0+u_time)*cos(vUv.y*10.0+u_time);
    vec3 color=max(vec3(0.0),u_accentColor+vec3(wave*0.14*u_tensorPulse));
    gl_FragColor=vec4(color,0.20+0.45*u_tensorPulse);
- }\`;
+ }`;
 export function shaderPulseFromMetrics(metrics){
  const n=typeof metrics?.frame_interval_avg_ms==='number'?metrics.frame_interval_avg_ms:0;
  if(!Number.isFinite(n))return 0;
