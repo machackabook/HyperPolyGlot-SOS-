@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { ResonanceConsole } from './components/ResonanceConsole';
+import { GaiaCognitionPanel } from './components/GaiaCognitionPanel';
+import { startNexusSync } from './services/nexusEvolutionSync.mjs';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
 import { XYouTubeAICard } from './components/XYouTubeAICard';
 import { EnvironmentState } from './types';
@@ -58,6 +60,9 @@ export function App() {
     },
   });
 
+  // One sync listener, atomic Mesh v4 metadata reconciliation, no full-canvas remount.
+  useEffect(() => startNexusSync(window), []);
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#02050b] select-none font-mono">
       {/* Dynamic YouTube Background Video Player & Content Transition Layer */}
@@ -73,6 +78,7 @@ export function App() {
 
       {/* Explicit opt-in mathematical field console; original HyperTerminal stays intact. */}
       <ResonanceConsole />
+      <GaiaCognitionPanel />
     </div>
   );
 }
