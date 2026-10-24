@@ -79,7 +79,30 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   if(!Number.isSafeInteger(limit)||limit<1||limit>8)throw new RangeError('Search limit is 1-8');
   return read('/v1/scribe/search','?q='+encodeURIComponent(query)+'&limit='+limit);
  }
- return {connect,disconnect,ping,scribeStatus,scribeSearch,status:snapshot,
+ async function writeMount(path,body){
+  if(!token || state.state!=='connected')throw new Error('Authenticate localhost mesh first');
+  const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),123000);
+  try {
+   const response=await getFetch(HOST+path,{method:'POST',
+    headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify(body),signal:abort.signal,cache:'no-store',credentials:'omit',mode:'cors'});
+   if(!response.ok)throw new Error('Local mount operation HTTP '+response.status);
+   return await response.json();
+  }finally{clearTimeout(timer)}
+ }
+ function listMounts(){return read('/v1/mounts')}
+ function cloneMount(mount,repository){
+  if(!/^[a-z][a-z0-9-]{0,39}$/.test(mount)||
+     !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,38}\/[-a-zA-Z0-9_.]{1,100}$/.test(repository))
+    throw new TypeError('Expected safe mount and GitHub OWNER/REPO');
+  return writeMount('/v1/mounts/clone',{mount,repository});
+ }
+ function linkMount(mount,url){
+  if(!/^[a-z][a-z0-9-]{0,39}$/.test(mount)||typeof url!=='string'||!
+     url.startsWith('https://'))throw new TypeError('Expected mount and HTTPS URL');
+  return writeMount('/v1/mounts/link',{mount,url});
+ }
+ return {connect,disconnect,ping,scribeStatus,scribeSearch,listMounts,cloneMount,linkMount,status:snapshot,
   subscribe(cb){if(typeof cb!=='function')throw new TypeError('Callback required');
    listeners.add(cb);return()=>listeners.delete(cb)}};
 }
