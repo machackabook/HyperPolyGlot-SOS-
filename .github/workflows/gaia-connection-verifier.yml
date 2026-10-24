@@ -1,0 +1,38 @@
+name: GAIA Connection Verification and Authorization
+on:
+  push:
+    paths:
+      - 'src/services/gaiaAuthorizationGate.mjs'
+      - 'src/services/gaiaConnectionVerifier.mjs'
+      - 'src/components/GaiaConnectionCenter.tsx'
+      - 'src/services/quineMeshService.mjs'
+      - 'src/App.tsx'
+      - 'tests/gaia-connection-verifier.test.mjs'
+      - '.github/workflows/gaia-connection-verifier.yml'
+  pull_request:
+    paths:
+      - 'src/services/gaiaAuthorizationGate.mjs'
+      - 'src/services/gaiaConnectionVerifier.mjs'
+      - 'src/components/GaiaConnectionCenter.tsx'
+      - 'src/services/quineMeshService.mjs'
+      - 'src/App.tsx'
+      - 'tests/gaia-connection-verifier.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  health-consent-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check executable JS module syntax
+        run: |
+          node --check src/services/gaiaAuthorizationGate.mjs
+          node --check src/services/gaiaConnectionVerifier.mjs
+          node --check src/services/quineMeshService.mjs
+      - name: Test service provenance and explicit approvals
+        run: node --test tests/gaia-connection-verifier.test.mjs
