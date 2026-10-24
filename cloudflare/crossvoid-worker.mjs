@@ -31,7 +31,8 @@ function unbase64(str){
 async function verifyAccessJWT(token,env){
  const team=String(env.CF_ACCESS_TEAM_DOMAIN||'').toLowerCase();
  const aud=String(env.CF_ACCESS_AUD||'');
- if(!/^[a-z0-9.-]+\.cloudflareaccess\.com$/.test(team)||!aud||typeof token!=='string'||token.length>8192)
+ const owner=String(env.CF_OPERATOR_EMAIL||'').trim().toLowerCase();
+ if(!/^[a-z0-9.-]+\.cloudflareaccess\.com$/.test(team)||!aud||!owner||typeof token!=='string'||token.length>8192)
   return false;
  const parts=token.split('.');
  if(parts.length!==3)return false;
@@ -41,7 +42,8 @@ async function verifyAccessJWT(token,env){
   const now=Math.floor(Date.now()/1000);
   if(header.alg!=='RS256'||!header.kid||typeof header.kid!=='string'||header.kid.length>256)
    return false;
-  if(payload.iss!=='https://'+team||!Array.isArray(payload.aud)||!payload.aud.includes(aud)||
+  if(typeof payload.email!=='string'||payload.email.toLowerCase()!==owner||
+    payload.iss!=='https://'+team||!Array.isArray(payload.aud)||!payload.aud.includes(aud)||
     !Number.isFinite(payload.exp)||payload.exp<=now||payload.exp>now+86400||
     !Number.isFinite(payload.iat)||payload.iat>now+90)return false;
   if(!jwks||jwksExpiry<Date.now()){
@@ -93,6 +95,25 @@ async function handle(req,env){
   return valid?responseJson({authorized:true,scope:'operator-status-only',
     accessVerified:true},200,origin):
     responseJson({authorized:false,accessVerified:false},401,origin);
+ }
+ if(req.method==='GET'&&url.pathname==='/api/crossvoid/operator/events/summary'){
+  // Aggregate opt-in journey events only. Never return IPs, fingerprint IDs or raw sessions.
+  const verified=await verifyAccessJWT(req.headers.get('Cf-Access-Jwt-Assertion'),env);
+  if(!verified)return responseJson({error:'operator-access-required'},401,origin);
+  if(!env.EVENT_DB)return responseJson({error:'event-store-not-configured'},503,origin);
+  const number=Number(url.searchParams.get('days')||7);
+  if(!Number.isSafeInteger(number)||number<1||number>30)
+    return responseJson({error:'invalid-day-range'},400,origin);
+  const since=Date.now()-number*86400000;
+  try{
+   const data=await env.EVENT_DB.prepare(
+    'SELECT stage,event,source,COUNT(*) AS total FROM crossvoid_events '+
+    'WHERE created_at >= ?1 GROUP BY stage,event,source ORDER BY total DESC LIMIT 60'
+   ).bind(since).all();
+   return responseJson({source:'crossvoid-first-party-d1',days:number,
+    counts:Array.isArray(data?.results)?data.results:[],rawIdentifiersIncluded:false,
+    note:'Opt-in journey events only; independent request logs are not represented.'},200,origin);
+  }catch{return responseJson({error:'event-summary-unavailable'},503,origin)}
  }
  if(req.method==='POST'&&url.pathname==='/api/portal/event'){
   if(!ORIGINS.has(origin))return responseJson({error:'invalid-origin'},403,origin);
