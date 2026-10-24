@@ -1,124 +1,89 @@
 import { audioVoiceService } from './audioVoiceService';
 
+/**
+ * Browser-provided location is useful for TerraSphere, but never establishes
+ * hardware identity or protection against mock locations on its own.
+ *
+ * Coordinates are session-local and are not transmitted to geocoders,
+ * telemetry ingestion or GAIA Memory automatically.
+ */
 export interface GeoTelemetry {
   lat: number;
   lng: number;
   plusCode: string;
   address: string;
-  weather: {
-    temp: number;
-    description: string;
-    humidity: number;
-    windSpeed: number;
-  } | null;
+  weather: { temp: number; description: string; humidity: number; windSpeed: number } | null;
   status: 'active' | 'searching' | 'error';
+  accuracyMeters?: number | null;
+  observedAt?: string | null;
+  source?: 'browser-geolocation' | 'none';
+  deviceAttested?: false;
 }
-
 class GeoNexusService {
   private telemetry: GeoTelemetry = {
-    lat: 0,
-    lng: 0,
-    plusCode: 'N/A',
-    address: 'ORBITAL_VOID',
-    weather: null,
-    status: 'searching'
+    lat: 0, lng: 0, plusCode: 'N/A', address: 'NOT_RESOLVED', weather: null,
+    status: 'searching', accuracyMeters: null, observedAt: null,
+    source: 'none', deviceAttested: false
   };
-
-  private listeners: ((telemetry: GeoTelemetry) => void)[] = [];
-
-  constructor() {
-    // Geolocation is requested only after explicit geo-sync activation.
+  private listeners = new Set<(telemetry: GeoTelemetry) => void>();
+  private generation = 0;
+  public onTelemetryChange(fn: (value: GeoTelemetry) => void) {
+    this.listeners.add(fn);
+    return () => { this.listeners.delete(fn); };
   }
-
-  public onTelemetryChange(cb: (telemetry: GeoTelemetry) => void) {
-    this.listeners.push(cb);
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== cb);
-    };
-  }
-
   private notify() {
-    this.listeners.forEach(l => l({ ...this.telemetry }));
-  }
-
-  public getTelemetry() {
-    return { ...this.telemetry };
-  }
-
-  private async startTracking() {
-    if (!navigator.geolocation) {
-      this.telemetry.status = 'error';
-      this.notify();
-      return;
+    for (const listener of this.listeners) {
+      try { listener(this.getTelemetry()); } catch { /* observer isolation */ }
     }
-
-    navigator.geolocation.watchPosition(
-      (pos) => {
-        this.updatePosition(pos.coords.latitude, pos.coords.longitude);
-      },
-      (err) => {
-        console.warn('[GeoNexus] Error tracking position:', err.message);
-        this.telemetry.status = 'error';
+  }
+  public getTelemetry(): GeoTelemetry {
+    return { ...this.telemetry, weather: this.telemetry.weather ? { ...this.telemetry.weather } : null };
+  }
+  public clearLocation() {
+    // Revokes access to any stored coordinate inside this page instance.
+    this.generation++;
+    this.telemetry = {
+      lat: 0, lng: 0, plusCode: 'N/A', address: 'NOT_RESOLVED',
+      weather: null, status: 'searching', accuracyMeters: null,
+      observedAt: null, source: 'none', deviceAttested: false
+    };
+    this.notify();
+  }
+  public async syncTerminalWithGeo(): Promise<GeoTelemetry> {
+    // Must be invoked from an explicit user action; never on page load.
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      this.telemetry.status='error';this.notify();
+      throw new Error('Geolocation unavailable in this browser');
+    }
+    const request = ++this.generation;
+    this.telemetry.status='searching';this.notify();
+    return new Promise((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(pos=>{
+        if (request !== this.generation) {
+          reject(new Error('Location request cancelled'));return;
+        }
+        const {latitude,longitude,accuracy}=pos.coords;
+        if (!Number.isFinite(latitude)||!Number.isFinite(longitude)||
+            latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+          this.telemetry.status='error';this.notify();reject(new Error('Invalid location reading'));return;
+        }
+        this.telemetry = {
+          lat: latitude, lng: longitude, accuracyMeters: accuracy,
+          plusCode: 'N/A', address: 'LOCAL_BROWSER_FIX',
+          weather: null, status: 'active',
+          observedAt: new Date(pos.timestamp||Date.now()).toISOString(),
+          source: 'browser-geolocation', deviceAttested: false
+        };
         this.notify();
-      },
-      { enableHighAccuracy: true }
-    );
-  }
-
-  private async updatePosition(lat: number, lng: number) {
-    const isNew = Math.abs(this.telemetry.lat - lat) > 0.0001 || Math.abs(this.telemetry.lng - lng) > 0.0001;
-    
-    this.telemetry.lat = lat;
-    this.telemetry.lng = lng;
-    this.telemetry.status = 'active';
-
-    if (isNew) {
-      await this.refreshGeoData(lat, lng);
-    } else {
-      this.notify();
-    }
-  }
-
-  private async refreshGeoData(lat: number, lng: number) {
-    try {
-      // 1. Geocode for address and Plus Code
-      const geoResp = await fetch(`/api/geocode?lat=${lat}&lng=${lng}`);
-      if (geoResp.ok) {
-        const geoData = await geoResp.json();
-        if (geoData.results && geoData.results[0]) {
-          this.telemetry.address = geoData.results[0].formatted_address;
-          this.telemetry.plusCode = geoData.plus_code?.global_code || 'N/A';
-        }
-      }
-
-      // 2. Weather Data
-      const weatherResp = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
-      if (weatherResp.ok) {
-        const weatherData = await weatherResp.json();
-        // Assuming Weather API structure from GMP
-        // CurrentConditions lookup returns an object with condition and temperature
-        const current = weatherData;
-        if (current) {
-          this.telemetry.weather = {
-            temp: current.temperature?.value || 0,
-            description: current.condition?.description || 'Clear',
-            humidity: current.humidity?.value || 0,
-            windSpeed: current.windSpeed?.value || 0
-          };
-        }
-      }
-    } catch (err) {
-      console.error('[GeoNexus] Data refresh failed:', err);
-    } finally {
-      this.notify();
-    }
-  }
-
-  public async syncTerminalWithGeo() {
-    await this.startTracking();
-    audioVoiceService.speak(`Synchronizing terminal with physical coordinates at ${this.telemetry.plusCode}. Initializing Earth descent protocol.`);
-    return this.telemetry;
+        // Never speak latitude/longitude aloud or claim verified physical identity.
+        void audioVoiceService.speak('TerraSphere location available for this session. Device attestation remains unverified.');
+        resolve(this.getTelemetry());
+      },err=>{
+        if (request!==this.generation)return;
+        this.telemetry.status='error';this.notify();
+        reject(new Error('Browser geolocation not available: '+err.code));
+      },{enableHighAccuracy:true,maximumAge:0,timeout:12000});
+    });
   }
 }
-
 export const geoNexusService = new GeoNexusService();
