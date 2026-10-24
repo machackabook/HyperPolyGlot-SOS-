@@ -4,6 +4,7 @@ import argparse, asyncio, hmac, json, os, platform, secrets, time, shutil
 from gaia_gh_mounts import list_mounts, link_website, clone_repo
 from xai_card_store import XaiCardStore, ProviderUnavailable
 from gaia_native_runtime import GAIARuntime, GAIA_TOOLS, comms_status
+from gaia_local_ai import RuntimeTickets, RuntimeUnavailable, ollama_status, ollama_seed, ollama_stream, extract_pdf_local
 from datetime import datetime, timezone
 from aiohttp import ClientSession, ClientTimeout, web
 
@@ -30,6 +31,9 @@ def create_app(token,scribe_port=8787):
   origin=req.headers.get('Origin')
   if origin is not None and origin not in ORIGINS:
    raise web.HTTPForbidden(text='Origin not approved')
+  # Big requests are restricted to local PDF extraction, not arbitrary bridge APIs.
+  if req.method=='POST' and req.path!='/v1/ai/runtime/pdf' and (req.content_length or 0)>8192:
+   raise web.HTTPRequestEntityTooLarge(max_size=8192,actual_size=req.content_length)
   if req.method=='OPTIONS':
    if origin is None:raise web.HTTPForbidden(text='Preflight origin required')
    response=web.Response(status=204)
@@ -44,13 +48,14 @@ def create_app(token,scribe_port=8787):
   if origin:
    response.headers.update({
     'Access-Control-Allow-Origin':origin,
-    'Access-Control-Allow-Headers':'Authorization, Content-Type',
+    'Access-Control-Allow-Headers':'Authorization, Content-Type, X-GAIA-Runtime-Ticket',
     'Access-Control-Allow-Methods':'GET, POST, OPTIONS',
     'Access-Control-Allow-Private-Network':'true','Vary':'Origin'})
   response.headers['Cache-Control']='no-store'
   response.headers['X-Content-Type-Options']='nosniff'
   return response
- app=web.Application(middlewares=[protect],client_max_size=4096)
+ app=web.Application(middlewares=[protect],client_max_size=8*1024*1024+65536)
+ local_tokens=RuntimeTickets(lifespan=900)
  xai_cards=XaiCardStore()
  native_runtime=GAIARuntime(workers=2)
  def status_data():
@@ -58,7 +63,7 @@ def create_app(token,scribe_port=8787):
    'node_session':session,'os':platform.system(),'python':platform.python_version(),
    'process_id':os.getpid(),'uptime_seconds':round(time.monotonic()-started,3),
    'observed_at':datetime.now(timezone.utc).isoformat(),
-   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link','xai-card-status','xai-card-chat','xai-card-history','gaia-runtime-status','gaia-compute-jobs','gaia-mcp-adapter'],
+   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link','xai-card-status','xai-card-chat','xai-card-history','gaia-runtime-status','gaia-compute-jobs','gaia-mcp-adapter','gaia-local-ollama','gaia-runtime-ticket','gaia-local-pdf'],
    'remote_execution':False,'device_control':False,'privileged_authority':False,
    'gh_installed':bool(shutil.which('gh')),
    'capability_authorization':'paired-localhost-user-command-only'}
@@ -167,6 +172,73 @@ def create_app(token,scribe_port=8787):
    return web.json_response({'source':'local-adapter','tool':d['name'],'result':result})
   except (ValueError,TypeError):
    raise web.HTTPBadRequest(text='Unknown local read-only tool')
+ async def ai_runtime_status(req):
+  status_data=await ollama_status()
+  return web.json_response({**status_data,'default_route':'local-inference',
+                            'ticket_seconds':900,'paid_cloud_fallback':False,
+                            'pdf_extraction_requires_pymupdf':True})
+ async def ai_runtime_ticket(req):
+  # The existing paired bridge is the principal. Its runtime ticket does not
+  # grant anything except local text inference and bounded local PDF extraction.
+  return web.json_response({'ticket':local_tokens.issue(session),'scope':'local-inference',
+                            'expires_in':900,'provider':'local-ollama'})
+ def validate_local_ticket(d):
+  if not isinstance(d,dict) or not local_tokens.verify(d.get('ticket'),session):
+   raise web.HTTPUnauthorized(text='No active scoped local inference ticket')
+ def checked_chat_payload(d):
+  if not isinstance(d,dict) or set(d)-{'ticket','prompt','context','maxTokens'}:
+   raise web.HTTPBadRequest(text='Invalid local prompt fields')
+  validate_local_ticket(d)
+  return d.get('prompt'),d.get('context',''),d.get('maxTokens',256)
+ async def ai_runtime_chat(req):
+  try:
+   d=await req.json()
+   prompt,context,max_tokens=checked_chat_payload(d)
+   output=await ollama_seed(prompt,context,max_tokens)
+   return web.json_response(output)
+  except (ValueError,TypeError):
+   raise web.HTTPBadRequest(text='Invalid bounded local chat request')
+  except RuntimeUnavailable:
+   raise web.HTTPServiceUnavailable(text='Local Ollama not connected or model unavailable')
+ async def ai_runtime_stream(req):
+  try:
+   d=await req.json()
+   prompt,context,max_tokens=checked_chat_payload(d)
+   from gaia_local_ai import validate_prompt
+   validate_prompt(prompt,context,max_tokens)
+  except (ValueError,TypeError):
+   raise web.HTTPBadRequest(text='Invalid bounded local chat stream')
+  response=web.StreamResponse(status=200,headers={
+   'Content-Type':'application/x-ndjson; charset=utf-8',
+   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+  await response.prepare(req)
+  try:
+   async for frame in ollama_stream(prompt,context,max_tokens):
+    await response.write((json.dumps(frame,ensure_ascii=False)+'\n').encode('utf-8'))
+  except RuntimeUnavailable:
+   try:await response.write(b'{"type":"error","reason":"local-model-unavailable"}\n')
+   except (ConnectionResetError,OSError):pass
+  except (ConnectionResetError,OSError):pass
+  try:await response.write_eof()
+  except (ConnectionResetError,OSError):pass
+  return response
+ async def ai_runtime_pdf(req):
+  if req.content_type!='application/pdf':
+   raise web.HTTPUnsupportedMediaType(text='Only application/pdf is accepted')
+  ticket=req.headers.get('X-GAIA-Runtime-Ticket','')
+  if not local_tokens.verify(ticket,session):
+   raise web.HTTPUnauthorized(text='Local runtime ticket required')
+  if not (1<=(req.content_length or 0)<=8*1024*1024):
+   raise web.HTTPRequestEntityTooLarge(max_size=8*1024*1024,actual_size=req.content_length or 0)
+  try:
+   payload=await req.read()
+   result=await asyncio.to_thread(extract_pdf_local,payload)
+   return web.json_response(result)
+  except ValueError:
+   raise web.HTTPBadRequest(text='PDF signature/size invalid')
+  except RuntimeUnavailable:
+   raise web.HTTPServiceUnavailable(text='Local PyMuPDF PDF extraction not available')
+
  async def ws_handler(req):
   ws=web.WebSocketResponse(protocols=('quine-mesh-v1',),max_msg_size=2048,heartbeat=30)
   await ws.prepare(req);await ws.send_json({'type':'attached','status':status_data()})
@@ -187,6 +259,11 @@ def create_app(token,scribe_port=8787):
      await ws.send_json({'type':'pong','id':i,
       'received_at':datetime.now(timezone.utc).isoformat()})
   return ws
+ app.router.add_get('/v1/ai/runtime/status',ai_runtime_status)
+ app.router.add_get('/v1/ai/runtime/ticket',ai_runtime_ticket)
+ app.router.add_post('/v1/ai/runtime/chat',ai_runtime_chat)
+ app.router.add_post('/v1/ai/runtime/stream',ai_runtime_stream)
+ app.router.add_post('/v1/ai/runtime/pdf',ai_runtime_pdf)
  app.router.add_get('/v1/status',status)
  app.router.add_get('/v1/scribe/status',scribe_status)
  app.router.add_get('/v1/scribe/search',scribe_search)
