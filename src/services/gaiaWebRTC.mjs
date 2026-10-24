@@ -28,7 +28,8 @@ export function createCrypticCall({roomId,signalingUrl,onState=()=>{},onRemoteSt
   if(typeof signalingUrl!=='string'||!/^wss:\/\/[^\s/#?]+\/[^\s#?]*$/.test(signalingUrl))
     throw new TypeError('Configured encrypted WSS signaling endpoint required');
   if(typeof WebSocketCtor!=='function'||typeof PeerCtor!=='function')throw Error('WebRTC not available');
-  let socket=null,pc=null,media=null,peers=0,closed=false,negotiating=false;
+  let socket=null,pc=null,media=null,peers=0,closed=false,negotiating=false,initiator=false;
+  let pendingOffer=null;const pendingCandidates=[];
   const emit=(state,extra={})=>onState({state,roomId,...extra});
   const signal=message=>{
     if(socket?.readyState!==1)throw Error('Signaling not connected');
@@ -39,13 +40,14 @@ export function createCrypticCall({roomId,signalingUrl,onState=()=>{},onRemoteSt
     const peer=new PeerCtor(config);
     pc=peer;
     peer.ontrack=e=>onRemoteStream(e.streams?.[0]||null);
+    peer.oniceconnectionstatechange=()=>emit('ice-'+peer.iceConnectionState);
     peer.onicecandidate=e=>{if(e.candidate&&socket?.readyState===1)signal({type:'candidate',candidate:e.candidate.toJSON?.()||e.candidate})};
     peer.onconnectionstatechange=()=>emit(peer.connectionState==='connected'?'connected':peer.connectionState);
     if(media)for(const track of media.getTracks())peer.addTrack(track,media);
     return peer;
   }
   async function offer(){
-    if(!media||peers<1||negotiating)return;
+    if(!initiator||!media||peers<1||negotiating)return;
     negotiating=true;
     try{
       const peer=await ensurePeer();
@@ -57,24 +59,28 @@ export function createCrypticCall({roomId,signalingUrl,onState=()=>{},onRemoteSt
   async function incoming(raw){
     if(!raw||typeof raw!=='object')return;
     switch(raw.type){
-      case 'ready':peers=Math.max(0,Math.min(1,Number(raw.peers)||0));emit('ready',{peers});break;
+      case 'ready':peers=Math.max(0,Math.min(1,Number(raw.peers)||0));initiator=peers===0;emit('ready',{peers});break;
       case 'peer-joined':peers=1;emit('peer-ready',{peers});await offer();break;
       case 'peer-left':peers=0;emit('peer-left');if(pc){pc.close();pc=null}break;
       case 'offer': {
-        if(!media){emit('incoming-call');return} // Must explicitly accept to capture devices.
+        if(!media){pendingOffer=raw.description;emit('incoming-call');return} // Must explicitly accept to capture devices.
         const p=await ensurePeer();
         if(raw.description?.type!=='offer'||typeof raw.description.sdp!=='string')return;
         await p.setRemoteDescription(raw.description);
+        while(pendingCandidates.length)await p.addIceCandidate(pendingCandidates.shift());
         const answer=await p.createAnswer();await p.setLocalDescription(answer);
         signal({type:'answer',description:{type:'answer',sdp:answer.sdp}});
         emit('answering');break;
       }
       case 'answer':{
         if(!pc||raw.description?.type!=='answer'||typeof raw.description.sdp!=='string')return;
-        await pc.setRemoteDescription(raw.description);break;
+        await pc.setRemoteDescription(raw.description);
+        while(pendingCandidates.length)await pc.addIceCandidate(pendingCandidates.shift());
+        break;
       }
       case 'candidate':{
-        if(!pc||!pc.remoteDescription||!raw.candidate)return;
+        if(!raw.candidate)return;
+        if(!pc||!pc.remoteDescription){if(pendingCandidates.length<128)pendingCandidates.push(raw.candidate);return}
         await pc.addIceCandidate(raw.candidate);break;
       }
       case 'hangup':stopMedia();emit('hangup');break;
@@ -99,10 +105,12 @@ export function createCrypticCall({roomId,signalingUrl,onState=()=>{},onRemoteSt
     if(!media?.getTracks||media.getTracks().length===0)throw Error('No granted media tracks');
     await ensurePeer();
     emit('local-media-ready',{peers});
-    if(peers>0)await offer();
+    if(pendingOffer){const offer=pendingOffer;pendingOffer=null;await incoming({type:'offer',description:offer})}
+    else if(peers>0&&initiator)await offer();
     return media;
   }
   function stopMedia(){
+    pendingOffer=null;pendingCandidates.length=0;
     if(media){for(const track of media.getTracks())track.stop();media=null}
     if(pc){pc.close();pc=null}
   }
