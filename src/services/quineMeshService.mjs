@@ -1,5 +1,6 @@
 /** Authenticated browser-to-localhost bridge for HyperTerminal Polyglot Quine OS.
  * Never automatically connects or authorizes host-level commands. */
+import {gaiaAuthorizationGate} from './gaiaAuthorizationGate.mjs';
 const HOST='http://127.0.0.1:8791',WS='ws://127.0.0.1:8791/v1/ws';
 const GOOD_TOKEN=/^[a-zA-Z0-9_-]{32,256}$/;
 export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
@@ -94,15 +95,26 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   }finally{clearTimeout(timer)}
  }
  function listMounts(){return read('/v1/mounts')}
- function cloneMount(mount,repository){
+ async function cloneMount(mount,repository){
   if(!/^[a-z][a-z0-9-]{0,39}$/.test(mount)||
      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,38}\/[-a-zA-Z0-9_.]{1,100}$/.test(repository))
     throw new TypeError('Expected safe mount and GitHub OWNER/REPO');
+  if(state.state!=='connected')throw new Error('Pair the local bridge first');
+  await gaiaAuthorizationGate.request('github.mount.clone',mount+'@'+repository);
+  if(state.state!=='connected')throw new Error('Bridge disconnected before authorization completed');
   return writeMount('/v1/mounts/clone',{mount,repository});
  }
- function linkMount(mount,url){
-  if(!/^[a-z][a-z0-9-]{0,39}$/.test(mount)||typeof url!=='string'||!
-     url.startsWith('https://'))throw new TypeError('Expected mount and HTTPS URL');
+ async function linkMount(mount,url){
+  if(!/^[a-z][a-z0-9-]{0,39}$/.test(mount)||typeof url!=='string'||
+     !url.startsWith('https://'))throw new TypeError('Expected mount and HTTPS URL');
+  const target=new URL(url);
+  if(target.protocol!=='https:'||target.username||target.password)
+    throw new TypeError('Website URL cannot contain login credentials');
+  if(state.state!=='connected')throw new Error('Pair the local bridge first');
+  // Do not expose URL query values or tokens inside authorization prompts.
+  await gaiaAuthorizationGate.request('github.mount.link',
+    (mount+'@'+target.hostname+target.pathname).slice(0,220));
+  if(state.state!=='connected')throw new Error('Bridge disconnected before authorization completed');
   return writeMount('/v1/mounts/link',{mount,url});
  }
 
