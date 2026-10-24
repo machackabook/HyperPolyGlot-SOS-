@@ -238,9 +238,37 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   }finally{clearTimeout(timer)}
  }
 
+
+ function godStatus(){return read('/v1/god/status')}
+ function godDecide(capability,destination=null){
+  if(typeof capability!=='string'||! /^[a-z][a-z0-9.]{1,63}$/.test(capability))
+   throw new TypeError('Invalid GOD capability');
+  if(destination!==null&&(typeof destination!=='string'||destination.length>512))
+   throw new TypeError('Invalid bounded network destination');
+  return writeMount('/v1/god/decision',{capability,...(destination?{destination}:{})});
+ }
+ function forgeStatus(){return read('/v1/forge/status')}
+ function forgePlan(capability,destination=null){
+  if(typeof capability!=='string'||! /^[a-z][a-z0-9.]{1,63}$/.test(capability))
+   throw new TypeError('Invalid Forge capability');
+  if(destination!==null&&(typeof destination!=='string'||destination.length>512))
+   throw new TypeError('Invalid network destination');
+  return writeMount('/v1/forge/plan',{capability,...(destination?{destination}:{})});
+ }
+ function forgeCompute(kind,payload={}){
+  if(!['symplectic','digest','relations'].includes(kind))throw new TypeError('Unknown Forge compute');
+  return writeMount('/v1/forge/compute',{kind,payload});
+ }
+ function forgeGitHubRead(destination){
+  if(typeof destination!=='string'||!/^https:\/\/api\.github\.com\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/(?:readme|contents|git\/trees|git\/refs)[A-Za-z0-9_./%-]*)?$/.test(destination))
+   throw new TypeError('Only public api.github.com repository metadata can be read');
+  return writeMount('/v1/forge/github/read',{destination});
+ }
+
  return {connect,disconnect,ping,scribeStatus,scribeSearch,xaiCardStatus,xaiCardHistory,xaiCardChat,
   getRuntimeTicket,localAIStatus,localAIChat,localAIStream,localPDF,
   runtimeStatus,runtimeResult,runtimeSubmit,mcpCatalog,mcpRead,
+  godStatus,godDecide,forgeStatus,forgePlan,forgeCompute,forgeGitHubRead,
   listMounts,cloneMount,linkMount,status:snapshot,
   subscribe(cb){if(typeof cb!=='function')throw new TypeError('Callback required');
    listeners.add(cb);return()=>listeners.delete(cb)}};
