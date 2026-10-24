@@ -85,7 +85,7 @@ const BUILTIN_COMMANDS = [
   'd3', 'history', 'ping', 'netstat', 'curl', 'fetch', 'chromevox', 'contrast', 'top', 'theme',
   'links', 'ambient', 'harmonic', 'chronos', 'sentinel', 'ouroboros', 'mhtml', 'agent', 'spider', 'stress', 'mount', 'umount', 'engram', 'gdrive', 'geosync',
   'rgbled', 'profile', 'openwrt', 'gateway', 'ssh', 'netsec', 'kali', 'apikey', 'keys',
-  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe', 'memory'
+  'sparsebundle', 'sparse', 'prime', 'bun', 'uv', 'pip', 'state', 'dashboard', 'core', 'axs', 'mesh', 'scribe', 'memory', 'ghmount'
 ];
 
 export interface SentimentVisualConfig {
@@ -755,6 +755,34 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
     }
 
     switch (cmd) {
+      case 'ghmount': {
+        const op=(args[0]||'list').toLowerCase();
+        if (quineMeshService.status().state!=='connected') {
+          appendLine('Native GitHub mounts require a paired local Quine bridge. Run mesh connect first.', 'system');
+          break;
+        }
+        try {
+          if (op==='list'||op==='status') {
+            const mounts=await quineMeshService.listMounts();
+            appendLine(JSON.stringify(mounts,null,2),'output');
+          } else if (op==='clone') {
+            if (!args[1]||!args[2]) {
+              appendLine('Usage: ghmount clone <mount-name> <owner/repository>', 'system');break;
+            }
+            const result=await quineMeshService.cloneMount(args[1],args[2]);
+            appendLine(JSON.stringify(result,null,2),'success');
+          } else if (op==='link') {
+            if(!args[1]||!args[2]){appendLine('Usage: ghmount link <mount-name> <https-url>', 'system');break;}
+            const result=await quineMeshService.linkMount(args[1],args[2]);
+            appendLine(JSON.stringify(result,null,2),'success');
+          } else {
+            appendLine('ghmount list | ghmount clone <mount> <owner/repo> | ghmount link <mount> <https-url>', 'system');
+          }
+        } catch(e:any){
+          appendLine('Native mount unavailable: '+String(e?.message||e), 'error');
+        }
+        break;
+      }
       case 'mesh': {
         const op=(args[0]||'status').toLowerCase();
         if(op==='status'){appendLine(JSON.stringify(quineMeshService.status(),null,2),'output');}
@@ -870,6 +898,9 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
   axs octave <radians>    : Exact Fourier trace coordinates (not device telemetry)
 
 [GAIA CAUSAL INVARIANT CORE]
+  ghmount list            : Show real local GitHub checkout mounts
+  ghmount clone <m> <repo> : Clone an authorized GitHub owner/repo via local gh
+  ghmount link <m> <url>  : Save HTTPS application link in private mount metadata
   memory status           : Authenticated local Memory Fabric status
   memory recall <query>   : Source-indexed memory retrieval; cache for AI context
   scribe search <query>   : Existing local Scribe lookup
