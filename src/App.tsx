@@ -3,6 +3,7 @@ import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { ResonanceConsole } from './components/ResonanceConsole';
 import { GaiaCognitionPanel } from './components/GaiaCognitionPanel';
+import { GaiaAbsorptionLauncher } from './components/GaiaAbsorptionLauncher';
 import { startNexusSync } from './services/nexusEvolutionSync.mjs';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
 import { XYouTubeAICard } from './components/XYouTubeAICard';
@@ -89,6 +90,8 @@ export function App() {
       {/* Explicit opt-in mathematical field console; original HyperTerminal stays intact. */}
       <ResonanceConsole />
       <GaiaCognitionPanel />
+      {/* Portable local HTML archive: does not import secrets or executable code. */}
+      <GaiaAbsorptionLauncher />
       {/* Private/live data requires each device to pair with its local bridge. */}
       <NexusSystemPages />
       {/* Public CrossVoid visual entry. All authentication remains at Cryptic News. */}
