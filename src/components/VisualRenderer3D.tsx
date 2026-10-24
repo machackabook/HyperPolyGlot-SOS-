@@ -599,18 +599,33 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     let hoveredNodeId: string | null = null;
 
     const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-    const onKeyDown = (e: KeyboardEvent) => { if (keys.hasOwnProperty(e.key)) (keys as any)[e.key] = true; };
-    const onKeyUp = (e: KeyboardEvent) => { if (keys.hasOwnProperty(e.key)) (keys as any)[e.key] = false; };
+    // Scene navigation never responds to keys typed into terminal controls.
+    const isTextEntry = (target: EventTarget | null): boolean =>
+      target instanceof Element &&
+      !!target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]');
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTextEntry(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (Object.prototype.hasOwnProperty.call(keys, e.key)) (keys as any)[e.key] = true;
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (Object.prototype.hasOwnProperty.call(keys, e.key)) (keys as any)[e.key] = false;
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
+    // Only explicit interactions on the actual WebGL canvas steer the scene.
+    // Buttons, terminal editor, modals and embedded services are never intercepted.
+    const isSceneTarget = (target: EventTarget | null): boolean =>
+      target instanceof Node && container.contains(target);
     const onMouseDown = (e: MouseEvent) => {
+      if (!isSceneTarget(e.target)) return;
       isDragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
     };
     const onMouseUp = () => { isDragging = false; };
     const onTouchStart = (e: TouchEvent) => {
+      if (!isSceneTarget(e.target)) return;
       if (e.touches.length > 0) {
         isDragging = true;
         lastX = e.touches[0].clientX;
@@ -619,6 +634,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     };
     const onTouchEnd = () => { isDragging = false; };
     const onTouchMove = (e: TouchEvent) => {
+      if (!isSceneTarget(e.target)) { isDragging = false; return; }
       if (isDragging && e.touches.length > 0) {
         const deltaX = e.touches[0].clientX - lastX;
         const deltaY = e.touches[0].clientY - lastY;
@@ -636,6 +652,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
     window.addEventListener('touchmove', onTouchMove);
 
     const onPointerMove = (e: MouseEvent) => {
+      if (!isSceneTarget(e.target)) { isDragging = false; mouse.set(2, 2); return; }
       const nx = (e.clientX - width / 2) / (width / 2);
       const ny = (e.clientY - height / 2) / (height / 2);
       mouseX = nx;
@@ -1381,7 +1398,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
 
   return (
     <div
-      className={`fixed inset-0 w-full h-full overflow-hidden select-none transition-colors duration-700 ${
+      className={`fixed inset-0 w-full h-full overflow-hidden select-none pointer-events-none transition-colors duration-700 ${
         isVideoBackground ? 'bg-transparent' : 'bg-[#02050b]'
       }`}
       onClick={onSceneClick}
@@ -1390,7 +1407,7 @@ export const VisualRenderer3D: React.FC<VisualRenderer3DProps> = ({ envState, on
       <div
         ref={mountRef}
         className={`fixed inset-0 w-full h-full z-0 cursor-default transition-opacity duration-700 ${
-          show3DLayer ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          show3DLayer ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
       />
 
