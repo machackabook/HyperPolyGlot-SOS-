@@ -1,3 +1,4 @@
+import crossvoid from '../cloudflare/crossvoid-worker.mjs';
 // Production adapter for the real AI Studio React/Vite bundle in dist/.
 // No provider key is present in source code; no simulated AI/network/device replies.
 const HEADERS={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
@@ -33,9 +34,26 @@ async function chat(request,env) {
 export default {
  async fetch(request,env){
   const p=new URL(request.url).pathname;
-  if(p==="/api/status"&&request.method==="GET")return json({service:"cryptic-polyglot-public",frontend:"real-ai-studio-vite-dist",ai_enabled:env.AI_PUBLIC_ENABLED==="true"&&!!(env.GEMINI_API_KEY&&env.GEMINI_MODEL&&env.TURNSTILE_SECRET_KEY)});
+  // Cryptic News is the single public routing authority. CrossVoid and opted-in
+  // telemetry share this hostname; privileged actions remain Cloudflare Access gated.
+  if(p==="/api/portal/event"||p.startsWith("/api/crossvoid/")||p.startsWith("/crossvoid/go/")){
+    const issuer=String(env.ACCESS_ISSUER||"").trim();
+    const team=issuer.startsWith("https://")?new URL(issuer).hostname:"";
+    const scope={...env,CF_ACCESS_AUD:env.CF_ACCESS_AUD||env.ACCESS_AUD,
+      CF_ACCESS_TEAM_DOMAIN:env.CF_ACCESS_TEAM_DOMAIN||team,
+      CF_OPERATOR_EMAIL:env.CF_OPERATOR_EMAIL||env.OWNER_EMAIL};
+    return crossvoid.fetch(request,scope);
+  }
+  if(p==="/api/status"&&request.method==="GET")return json({
+    service:"cryptic-polyglot-public",frontend:"real-ai-studio-vite-dist",
+    static_assets_configured:!!env.ASSETS,
+    journey_db_configured:!!env.EVENT_DB,
+    ai_enabled:env.AI_PUBLIC_ENABLED==="true"&&!!(env.GEMINI_API_KEY&&env.GEMINI_MODEL&&env.TURNSTILE_SECRET_KEY)
+  });
   if(p==="/api/chat")return request.method==="POST"?chat(request,env):error("METHOD_NOT_ALLOWED",405);
   if(p.startsWith("/api/"))return error("NOT_FOUND",404);
+  if(!env.ASSETS||typeof env.ASSETS.fetch!=="function")
+    return json({error:"STATIC_ASSETS_NOT_CONFIGURED",message:"Deploy the actual Vite dist/ as Worker static assets."},503);
   return env.ASSETS.fetch(request);
  }
 };
