@@ -1,0 +1,56 @@
+name: GAIA Evolution V15 Evidence
+on:
+  push:
+    paths:
+      - 'src/components/GaiaCognitionPanel.tsx'
+      - 'src/components/VisualRenderer3D.tsx'
+      - 'src/App.tsx'
+      - 'src/components/HyperTerminal.tsx'
+      - 'src/services/gaiaMeshSyncV4.mjs'
+      - 'src/services/gaiaNeutronalityV15.mjs'
+      - 'src/services/pllmSensorAgent.mjs'
+      - 'src/services/geoNexusService.ts'
+      - 'src/services/nexusCauldronscope.mjs'
+      - 'src/services/nexusEvolutionSync.mjs'
+      - 'tools/nexus_ouroboros_guard.py'
+      - 'tests/gaia-evolution-v15.test.mjs'
+      - 'tests/test_nexus_ouroboros_guard.py'
+      - '.github/workflows/gaia-evolution-v15.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tools/nexus_ouroboros_guard.py'
+      - 'tests/gaia-evolution-v15.test.mjs'
+      - 'tests/test_nexus_ouroboros_guard.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-invariants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Parse browser modules and evolution Python
+        run: |
+          node --check src/services/gaiaNeutronalityV15.mjs
+          node --check src/services/pllmSensorAgent.mjs
+          node --check src/services/gaiaMeshSyncV4.mjs
+          node --check src/services/nexusCauldronscope.mjs
+          node --check src/services/nexusEvolutionSync.mjs
+          python -m py_compile tools/nexus_ouroboros_guard.py tests/test_nexus_ouroboros_guard.py
+      - name: Execute 11 source and mesh invariants
+        run: node --test tests/gaia-evolution-v15.test.mjs
+      - name: Execute 5 mutation rollback invariants
+        run: python -m unittest discover -s tests -p test_nexus_ouroboros_guard.py -v
+      - name: Compile full HyperTerminal frontend
+        run: |
+          npm ci
+          npm run build
