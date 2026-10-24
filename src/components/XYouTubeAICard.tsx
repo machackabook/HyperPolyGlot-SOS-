@@ -49,10 +49,21 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
   useEffect(()=>{
     const listener=()=>setOpen(true);
     window.addEventListener('gaia:open-x-card',listener);
+    const hangupFromTerminal=()=>{
+      call.current?.hangup();
+      setLocalStream(null);
+      setRemoteStream(null);
+      setCallState('idle');
+      gaiaCommsState.record({phase:'idle',localMedia:false,remoteMedia:false});
+    };
+    window.addEventListener('gaia:hangup-call',hangupFromTerminal);
     try{const item=fromInviteHash(window.location.hash) as Invite|null;
       if(item){setInvite(item);setMeetUrl(item.meetUrl||'');setOpen(true);}
     }catch{setNotice('Invalid or expired invitation');}
-    return()=>window.removeEventListener('gaia:open-x-card',listener);
+    return()=>{
+      window.removeEventListener('gaia:open-x-card',listener);
+      window.removeEventListener('gaia:hangup-call',hangupFromTerminal);
+    };
   },[]);
   useEffect(()=>()=>{call.current?.close();call.current=null;gaiaCommsState.reset();},[]);
   useEffect(()=>{if(localVideo.current)localVideo.current.srcObject=localStream},[localStream,flipped]);
