@@ -24,7 +24,9 @@ class GoldenArmyForge:
     def status(self):
         return {"engine":"Golden Army Forge / Singularity v1",
             "mode":"local-autonomous-with-GOD-network-boundary",
-            "network_execution_enabled": self.god.status()["policy_configured"],
+            "network_policy_loaded": self.god.status()["policy_configured"],
+            "github_read_authorized":bool(self.god.decide(
+                "github.repo.read","https://api.github.com/repos/machackabook/HyperPolyGlot-SOS-")["allowed"]),
             "forge_network_executions":self.network_executions,
             "forge_denied_network_requests":self.network_denials,
             "plans_evaluated":self.planned,
