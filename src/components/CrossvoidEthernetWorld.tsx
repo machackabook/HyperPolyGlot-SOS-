@@ -22,6 +22,8 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
  const [selected,setSelected]=useState<SceneNode|null>(null);
  const [view,setView]=useState<ViewStatus>({fps:0,renderNodes:0,sourceLinks:0,peerStatus:'not-connected'});
  const [paused,setPaused]=useState(false);
+ const pausedRef=useRef(false);
+ useEffect(()=>{pausedRef.current=paused},[paused]);
  const [rotation,setRotation]=useState({yaw:0,pitch:0});
  const world=useRef<{select:(id:string)=>void}|null>(null);
  const frame=gaiaMeshV4.snapshot();
@@ -42,7 +44,6 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
    renderer.setPixelRatio(Math.min(1.5,window.devicePixelRatio||1));
    root.appendChild(renderer.domElement);
    renderer.domElement.style.cssText='width:100%;height:100%;display:block;cursor:grab;touch-action:none';
-   const objects:THREE.Object3D[]=[];
    const materials:THREE.Material[]=[];
    const geometries:THREE.BufferGeometry[]=[];
    const nodes:SceneNode[]=[];
@@ -53,7 +54,7 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
    const glow=new THREE.PointLight(0x00e5ff,48,120);
    glow.position.set(0,4,8);scene.add(glow);
    function addMesh(mesh:THREE.Mesh, pick=false){
-     objects.push(mesh);graphGroup.add(mesh);
+     graphGroup.add(mesh);
      if(pick)pickables.push(mesh);
    }
    // Rotating toroidal corridor; atmospheric objects represent geometry only.
@@ -159,7 +160,7 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
    const animate=(now:number)=>{
      if(disposed)return;
      raf=requestAnimationFrame(animate);
-     if(document.hidden||paused)return;
+     if(document.hidden||pausedRef.current){last=now;return;}
      const dt=Math.min(.05,(now-last)/1000);last=now;
      yaw+=(targetYaw-yaw)*.1;pitch+=(targetPitch-pitch)*.1;
      graphGroup.rotation.y=yaw;
@@ -186,7 +187,7 @@ export function CrossvoidEthernetWorld({onExit}:{onExit:()=>void}){
      geometries.forEach(x=>x.dispose());materials.forEach(x=>x.dispose());
      renderer.dispose();renderer.domElement.remove();world.current=null;
    };
- },[paused]); // Rebuilding on pause is unnecessary for physics; current scope is modest.
+ },[]); // Animation pauses without rebuilding WebGL resources.
  return <section className="relative mt-4 overflow-hidden rounded-2xl border border-cyan-400/40 bg-[#01030a]">
    <div className="absolute left-3 top-3 z-10 max-w-[72%] pointer-events-none">
      <p className="text-xs font-semibold tracking-widest text-amber-200">ETHERNET · INTERACTIVE CROSSVOID</p>
