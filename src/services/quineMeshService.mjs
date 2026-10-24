@@ -102,7 +102,26 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
      url.startsWith('https://'))throw new TypeError('Expected mount and HTTPS URL');
   return writeMount('/v1/mounts/link',{mount,url});
  }
- return {connect,disconnect,ping,scribeStatus,scribeSearch,listMounts,cloneMount,linkMount,status:snapshot,
+
+ function xaiCardStatus(){return read('/v1/xai/card/status')}
+ function xaiCardHistory(sessionId,limit=40){
+  if(typeof sessionId!=='string'||!/^[a-f0-9-]{36}$/i.test(sessionId))throw new TypeError('Expected card session UUID');
+  if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw new RangeError('History limit 1-100');
+  return read('/v1/xai/card/history','?sessionId='+encodeURIComponent(sessionId)+'&limit='+limit);
+ }
+ function xaiCardChat(message,videoId,sessionId=null){
+  if(typeof message!=='string'||!message.trim()||message.length>2400)
+   throw new TypeError('Prompt must contain 1-2400 characters');
+  if(typeof videoId!=='string'||!/^[A-Za-z0-9_-]{11}$/.test(videoId))
+   throw new TypeError('Valid YouTube video ID required');
+  if(sessionId!==null&&(typeof sessionId!=='string'||!/^[a-f0-9-]{36}$/i.test(sessionId)))
+   throw new TypeError('Invalid card session UUID');
+  const body={message:message.trim(),videoId};
+  if(sessionId)body.sessionId=sessionId;
+  return writeMount('/v1/xai/card/chat',body);
+ }
+
+ return {connect,disconnect,ping,scribeStatus,scribeSearch,xaiCardStatus,xaiCardHistory,xaiCardChat,listMounts,cloneMount,linkMount,status:snapshot,
   subscribe(cb){if(typeof cb!=='function')throw new TypeError('Callback required');
    listeners.add(cb);return()=>listeners.delete(cb)}};
 }
