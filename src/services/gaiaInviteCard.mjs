@@ -13,7 +13,11 @@ export function normalizeInvite(raw, now=Date.now()){
  if(!TITLE.test(title)||!VIDEO.test(videoId)||!ROOM.test(roomId))throw Error('Invalid invite fields');
  if(!Number.isSafeInteger(createdAt)||!Number.isSafeInteger(expiresAt)||
     expiresAt<=createdAt||expiresAt-createdAt>7*86400000)throw Error('Invalid duration');
- return Object.freeze({v:1,title,videoId,roomId,createdAt,expiresAt,kind:'watch'});
+ const meetUrl=raw.meetUrl===undefined||raw.meetUrl===''?'':String(raw.meetUrl);
+ if(meetUrl&&!/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}(?:\/)?$/.test(meetUrl))
+   throw Error('Invalid Google Meet invitation URL');
+ return Object.freeze({v:1,title,videoId,roomId,createdAt,expiresAt,
+   kind:'watch',...(meetUrl?{meetUrl}:{})});
 }
 export function encodeInvite(invite){
  const s=JSON.stringify(normalizeInvite(invite));
