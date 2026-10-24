@@ -67,6 +67,11 @@ export function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#02050b] select-none font-mono">
+      {/* Public builds have no inherited Google/GitHub identity. This is a display
+          of application scope, not a claim about third-party browser cookies. */}
+      <div role="status" className="pointer-events-none fixed left-3 top-3 z-40 max-w-[260px] rounded-lg border border-slate-700/70 bg-slate-950/75 px-2 py-1 text-[10px] text-slate-300 backdrop-blur-md">
+        PUBLIC TERMINAL · GUEST BY DEFAULT
+      </div>
       {/* Dynamic YouTube Background Video Player & Content Transition Layer */}
       <YouTubeBackgroundPlayer envState={envState} setEnvState={setEnvState} />
       {/* Optional X/Grok chat card: authenticated local provider and genuine YouTube embed. */}
