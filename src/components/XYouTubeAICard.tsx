@@ -39,6 +39,8 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
   const validVideo=/^[A-Za-z0-9_-]{11}$/.test(videoId);
   const watchUrl=validVideo?youtubeService.getNativeWatchUrl({videoId}):'https://www.youtube.com/';
   const embed=validVideo?youtubeService.buildEmbedUrl({videoId},false,true):'';
+  const selectedMeetURL=invite?.meetUrl||meetUrl;
+  const verifiedMeetURL=/^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/.test(selectedMeetURL)?selectedMeetURL:'';
   const aiStatus=provider==='gemini'?status?.gemini:status;
   const ready=mesh&&!!aiStatus?.configured&&!!aiStatus?.sdk_installed;
 
@@ -224,7 +226,7 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
                 placeholder="Paste a real Google Meet invite link (optional)"
                 aria-label="Meet URL" className="mb-2 w-full rounded bg-black/40 p-2 text-xs"/>
               <div className="flex gap-2">
-                <a className={button} href={invite?.meetUrl||meetUrl||'https://meet.google.com/new'}
+                <a className={button} href={verifiedMeetURL||'https://meet.google.com/new'}
                   rel="noopener noreferrer" target="_blank">Open Google Meet</a>
                 <a className={button} href="https://chat.google.com/"
                   rel="noopener noreferrer" target="_blank">Google Chat</a>
