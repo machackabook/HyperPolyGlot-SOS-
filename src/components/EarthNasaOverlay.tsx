@@ -59,8 +59,10 @@ export const EarthNasaOverlay: React.FC<EarthNasaOverlayProps> = ({ active }) =>
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 2 }}
-          className="fixed inset-0 z-5 w-full h-full pointer-events-auto"
+          className="fixed inset-0 z-5 w-full h-full pointer-events-none"
         >
+          {/* The map itself remains interactive; the fullscreen overlay never steals terminal clicks. */}
+          <div className="absolute inset-0 pointer-events-auto">
           <APIProvider apiKey={API_KEY} version="alpha">
             <Map3D
               {...cameraProps}
@@ -70,13 +72,14 @@ export const EarthNasaOverlay: React.FC<EarthNasaOverlayProps> = ({ active }) =>
               internalUsageAttributionIds={["gmp_mcp_codeassist_v1_aistudio"]}
             />
           </APIProvider>
+          </div>
 
           {/* GeoWeather HUD Overlay */}
           <motion.div 
             initial={{ x: 100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 2 }}
-            className="absolute bottom-24 right-6 z-20 p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl backdrop-blur-md text-[10px] font-mono text-cyan-300 w-64 shadow-[0_0_30px_rgba(0,242,255,0.1)]"
+            className="absolute bottom-24 right-6 z-20 pointer-events-none p-4 bg-slate-950/80 border border-cyan-500/30 rounded-xl backdrop-blur-md text-[10px] font-mono text-cyan-300 w-64 shadow-[0_0_30px_rgba(0,242,255,0.1)]"
           >
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1 mb-1">
