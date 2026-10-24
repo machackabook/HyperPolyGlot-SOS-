@@ -21,6 +21,7 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
  const [opacity,setOpacity]=useState(.78),[rotation,setRotation]=useState({x:0,y:0});
  const [consent,setConsent]=useState<TelemetryConsent>(()=>journeyConsent());
  const [receipt,setReceipt]=useState('');
+ const [voiceState,setVoiceState]=useState('not-started');
  const last=useRef<{x:number,y:number}|null>(null);
  const auth=crossvoidSecurityStatus();
  const destinations={
@@ -41,6 +42,27 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
   transitionCrossvoid(stage,next);setStage(next);report(next,kind);
  }
  function exit(){report(stage,'exit');setOpen(false)}
+ function speakCatacombs(){
+  // Voice navigates the public experience only; it is NOT biometric identity.
+  // Recognition may be processed by the browser's speech service.
+  if(stage!=='crystalline')return;
+  const BrowserSpeech=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
+  if(!BrowserSpeech){setVoiceState('unsupported-browser');return}
+  try{
+   const instance=new BrowserSpeech();
+   instance.lang='en-US';instance.continuous=false;instance.interimResults=false;instance.maxAlternatives=1;
+   instance.onresult=(event:any)=>{
+    const phrase=String(event.results?.[0]?.[0]?.transcript||'').toLowerCase().trim();
+    if(phrase==='open catacombs'||phrase==='enter crossvoid'||phrase==='open the catacombs'){
+      setVoiceState('public-navigation-recognized');
+      move('crossvoid','traverse');
+    }else setVoiceState('phrase-not-recognized');
+   };
+   instance.onerror=()=>setVoiceState('recognition-unavailable');
+   instance.onend=()=>setVoiceState(v=>v==='listening'?'no-command-heard':v);
+   setVoiceState('listening');instance.start();
+  }catch{setVoiceState('recognition-unavailable')}
+ }
  function drag(e:React.PointerEvent<SVGSVGElement>){
   if(!last.current)return;
   setRotation(p=>({x:Math.max(-28,Math.min(28,p.x-(e.clientY-last.current!.y)*.24)),
@@ -115,7 +137,12 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
     </React.Suspense>}
     <div className="flex flex-wrap justify-center gap-2">
      {stage==='surface'&&<button className={button} onClick={()=>move('crystalline','flip')}><RotateCcw size={14} className="mr-1 inline"/> FLIP THE CRYPT</button>}
-     {stage==='crystalline'&&<button className={button} onClick={()=>move('crossvoid','traverse')}><ShieldCheck size={14} className="mr-1 inline"/> ENTER CROSSVOID</button>}
+     {stage==='crystalline'&&<>
+      <button className={button} onClick={speakCatacombs} title="Optional voice navigation; browser may process speech online">
+       VOICE: OPEN CATACOMBS
+      </button>
+      <button className={button} onClick={()=>move('crossvoid','traverse')}><ShieldCheck size={14} className="mr-1 inline"/> ENTER CROSSVOID</button>
+     </>}
      {stage==='crossvoid'&&<button className={button} onClick={()=>move('ethernet','portal')}><Network size={14} className="mr-1 inline"/> ENTER ETHERNET</button>}
      {stage==='ethernet'&&<button className={button} onClick={()=>move('surface','portal')}><RotateCcw size={14} className="mr-1 inline"/> RETURN TO CRYPT</button>}
      <a className={button} href={destinations.cryptic.href} target="_blank" rel="noopener noreferrer"
@@ -134,6 +161,10 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
      </div>
      <p className="mt-2"><Info size={12} className="mr-1 inline"/> No keylogging, speech capture, GPS tracking, session cookies, or terminal credentials are sent as journey events. Authentication is not performed by GitHub Pages.</p>
      {receipt&&<p role="status" className="mt-2 text-amber-200">{receipt}</p>}
+     {stage==='crystalline'&&<p className="mt-2 text-[10px]" role="status">
+      Voice navigation: {voiceState}. The voice phrase is never accepted as identity proof or an operator authorization.
+      Voice recognition may use your browser's speech service. Use ENTER CROSSVOID without a microphone.
+     </p>}
      <p className="mt-1 text-[10px]">Backend authorization status: {auth.authorizedByStaticPage?'verified':'not asserted by static UI'}</p>
     </div>
    </div>
