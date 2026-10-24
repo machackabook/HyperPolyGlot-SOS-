@@ -672,7 +672,36 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
         }
       }
       const combinedMemoryContext=[engramsMarkdown,retrievedContext].filter(Boolean).join('\n\n').slice(0,3500);
-      const resp = await fetch('/api/chat', {
+      // A GitHub Pages deployment is static. Do not send a POST that must return 405.
+      // An alternate backend may be configured at build time; never send keys in the browser.
+      const configuredChatBase = (import.meta.env.VITE_CHAT_BACKEND_URL || '').trim();
+      if (!configuredChatBase && window.location.hostname.endsWith('.github.io')) {
+        throw new Error('Chat backend unavailable: GitHub Pages is static and cannot accept POST /api/chat. Start the HyperTerminal Node server or configure VITE_CHAT_BACKEND_URL. The native mount and memory commands work independently.');
+      }
+      const chatBase = configuredChatBase || window.location.origin;
+      const chatOrigin = new URL(chatBase);
+      if (chatOrigin.username || chatOrigin.password || chatOrigin.search || chatOrigin.hash ||
+          (chatOrigin.protocol !== 'https:' && !(chatOrigin.protocol === 'http:' &&
+            ['localhost', '127.0.0.1'].includes(chatOrigin.hostname)))) {
+        throw new Error('Invalid chat backend URL; requires HTTPS or localhost.');
+      }
+      // Discover an actual Node server, not an SPA HTML fallback masquerading as JSON.
+      const capabilityResponse = await fetch(new URL('/api/runtime-status', chatOrigin).toString(), {
+        method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store'
+      });
+      if (!capabilityResponse.ok || !
+          (capabilityResponse.headers.get('content-type') || '').includes('application/json')) {
+        throw new Error('Chat backend not running at ' + chatOrigin.origin + '; this frontend is reachable, but no POST /api/chat service is available.');
+      }
+      const runtimeInfo = await capabilityResponse.json();
+      if (runtimeInfo.service !== 'hyperterminal-node' ||
+          runtimeInfo.chat?.handler !== 'POST /api/chat') {
+        throw new Error('The configured host is not the HyperTerminal Node chat backend.');
+      }
+      if (runtimeInfo.chat?.ready !== true || runtimeInfo.chat?.provider !== 'gemini') {
+        throw new Error('Node backend is running but a real AI model is not configured. Local memory and gh mounts are still available.');
+      }
+      const resp = await fetch(new URL('/api/chat', chatOrigin).toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -689,7 +718,8 @@ Type 'help' to inspect command matrix, or speak / type naturally to converse.`,
       });
 
       if (!resp.ok) {
-        throw new Error(`Server returned HTTP ${resp.status}`);
+        if (resp.status === 405) throw new Error('HTTP 405: No POST /api/chat route on the active host; connect a real backend, not the static GitHub Pages site.');
+        throw new Error(`Chat backend returned HTTP ${resp.status}`);
       }
 
       const data = await resp.json();
