@@ -4,6 +4,10 @@ import {transitionCrossvoid,resolveCrossvoidDestination,crossvoidSecurityStatus}
 import {journeyConsent,setJourneyConsent,reportJourney} from '../services/crypticPortalTelemetry.mjs';
 
 type Stage='surface'|'crystalline'|'crossvoid'|'ethernet';
+// Split the WebGL world into its own bundle: no GPU allocation on landing view.
+const EthernetWorld=React.lazy(async()=>({
+ default:(await import('./CrossvoidEthernetWorld')).CrossvoidEthernetWorld
+}));
 type TelemetryConsent='yes'|'no'|'unset';
 const CHROMA=['#ffcc00','#00e5ff','#9932cc','#34d399'];
 const points=[
@@ -106,6 +110,9 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
      {stage==='crossvoid'&&'CrossVoid mediates destinations: GitHub Pages renders the static terminal, GitHub Actions verifies releases, and Cryptic News is the intended server-side gate.'}
      {stage==='ethernet'&&'The public spatial-world entry is ready for future multiplayer routing. This interface does not yet prove an online multiplayer session or permission to control devices.'}
     </div>
+    {stage==='ethernet'&&<React.Suspense fallback={<p className="mt-4 text-xs text-cyan-200">Loading source-linked Ethernet world…</p>}>
+      <EthernetWorld onExit={()=>move('crossvoid','traverse')}/>
+    </React.Suspense>}
     <div className="flex flex-wrap justify-center gap-2">
      {stage==='surface'&&<button className={button} onClick={()=>move('crystalline','flip')}><RotateCcw size={14} className="mr-1 inline"/> FLIP THE CRYPT</button>}
      {stage==='crystalline'&&<button className={button} onClick={()=>move('crossvoid','traverse')}><ShieldCheck size={14} className="mr-1 inline"/> ENTER CROSSVOID</button>}
