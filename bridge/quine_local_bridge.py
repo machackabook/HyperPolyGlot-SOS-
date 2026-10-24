@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """HyperTerminal Polyglot Quine OS local read-only, paired bridge (aiohttp)."""
-import argparse, asyncio, hmac, json, os, platform, secrets, time
+import argparse, asyncio, hmac, json, os, platform, secrets, time, shutil
+from gaia_gh_mounts import list_mounts, link_website, clone_repo
 from datetime import datetime, timezone
 from aiohttp import ClientSession, ClientTimeout, web
 
 ORIGINS=frozenset({
  'https://crypticnews.org','https://machackabook.github.io',
+ 'https://gaia-nexus-memory-bridge.machackabook.chatgpt.site',
  'https://cryptic-polyglot-public.saytyarnornglorei.workers.dev',
  'http://127.0.0.1:3000','http://localhost:3000',
  'http://127.0.0.1:5173','http://localhost:5173',
@@ -41,7 +43,7 @@ def create_app(token,scribe_port=8787):
    response.headers.update({
     'Access-Control-Allow-Origin':origin,
     'Access-Control-Allow-Headers':'Authorization, Content-Type',
-    'Access-Control-Allow-Methods':'GET, OPTIONS',
+    'Access-Control-Allow-Methods':'GET, POST, OPTIONS',
     'Access-Control-Allow-Private-Network':'true','Vary':'Origin'})
   response.headers['Cache-Control']='no-store'
   response.headers['X-Content-Type-Options']='nosniff'
@@ -52,8 +54,10 @@ def create_app(token,scribe_port=8787):
    'node_session':session,'os':platform.system(),'python':platform.python_version(),
    'process_id':os.getpid(),'uptime_seconds':round(time.monotonic()-started,3),
    'observed_at':datetime.now(timezone.utc).isoformat(),
-   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search'],
-   'remote_execution':False,'device_control':False,'privileged_authority':False}
+   'capabilities':['local-status','ws-ping','scribe-local-status','scribe-local-search','mount-status','mount-gh-clone','mount-web-link'],
+   'remote_execution':False,'device_control':False,'privileged_authority':False,
+   'gh_installed':bool(shutil.which('gh')),
+   'capability_authorization':'paired-localhost-user-command-only'}
  async def status(req):return web.json_response(status_data())
  async def scribe_request(endpoint,params=None):
   try:
@@ -77,6 +81,26 @@ def create_app(token,scribe_port=8787):
   d=await scribe_request('/api/search',params={'q':q,'limit':n})
   return web.json_response({'source':'local-nexus-scribe-v4',
     'mode':d.get('mode','local_retrieval'),'query':d.get('query'),'results':d.get('results',[])})
+ async def mount_list(req):
+  try: return web.json_response({'source':'local-native-filesystem','mounts':await list_mounts()})
+  except (OSError,ValueError,TypeError): raise web.HTTPServiceUnavailable(text='Local mount registry unavailable')
+ async def mount_clone(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'mount','repository'}:
+    raise ValueError('Only mount and repository are accepted')
+   result=await clone_repo(d.get('mount'),d.get('repository'))
+   return web.json_response(result)
+  except (ValueError,TypeError): raise web.HTTPBadRequest(text='Invalid mount or repository')
+  except (OSError,RuntimeError): raise web.HTTPServiceUnavailable(text='gh clone unavailable on this authenticated host; check gh auth status')
+ async def mount_link(req):
+  try:
+   d=await req.json()
+   if not isinstance(d,dict) or set(d)-{'mount','url'}:
+    raise ValueError('Only mount and url are accepted')
+   return web.json_response(await link_website(d.get('mount'),d.get('url')))
+  except (ValueError,TypeError): raise web.HTTPBadRequest(text='Invalid mount or HTTPS link')
+  except (OSError,RuntimeError): raise web.HTTPServiceUnavailable(text='Local mount registry unavailable')
  async def ws_handler(req):
   ws=web.WebSocketResponse(protocols=('quine-mesh-v1',),max_msg_size=2048,heartbeat=30)
   await ws.prepare(req);await ws.send_json({'type':'attached','status':status_data()})
@@ -100,6 +124,9 @@ def create_app(token,scribe_port=8787):
  app.router.add_get('/v1/status',status)
  app.router.add_get('/v1/scribe/status',scribe_status)
  app.router.add_get('/v1/scribe/search',scribe_search)
+ app.router.add_get('/v1/mounts',mount_list)
+ app.router.add_post('/v1/mounts/clone',mount_clone)
+ app.router.add_post('/v1/mounts/link',mount_link)
  app.router.add_get('/v1/ws',ws_handler)
  return app
 def main():
