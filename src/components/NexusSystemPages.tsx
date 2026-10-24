@@ -1,5 +1,5 @@
 import React, {useCallback,useEffect,useState} from 'react';
-import { X, Link2, Network, ShieldCheck, RefreshCcw, Terminal, LockKeyhole, ExternalLink } from 'lucide-react';
+import { X, Link2, Network, RefreshCcw, Terminal, LockKeyhole, ExternalLink } from 'lucide-react';
 import { quineMeshService } from '../services/quineMeshService.mjs';
 import { gaiaMeshV4 } from '../services/gaiaMeshSyncV4.mjs';
 import { pllmSensorAgent } from '../services/pllmSensorAgent.mjs';
@@ -101,7 +101,11 @@ export function NexusSystemPages(){
    const offPair=quineMeshService.subscribe((s:any)=>{
       setPair(s);nexusSystemPageMesh.pair(s);
    });
-   const offGraph=gaiaMeshV4.subscribe((s:any)=>setMeshRev(s.revision));
+   const offGraph=gaiaMeshV4.subscribe((s:any)=>{
+     setMeshRev(s.revision);
+     const current=routeFromHash(window.location.hash);
+     setView(current?getPageView(current.slug):null);
+   });
    const offComms=gaiaCommsState.subscribe(()=>setMeshRev((x:number)=>x+1));
    const offGeo=geoNexusService.onTelemetryChange(()=>setMeshRev((x:number)=>x+1));
    nexusSystemPageMesh.pair(quineMeshService.status());
@@ -188,7 +192,7 @@ export function NexusSystemPages(){
           {node?<div className="text-[11px]">
             <p className="text-slate-300">{node.id} · {node.status}</p>
             <a className="mt-1 flex items-center gap-1 break-all text-cyan-300 underline" href={node.sourceRef}
-              target="_blank" rel="noopener noreferrer">Verified-location source reference <ExternalLink size={12}/></a>
+              target="_blank" rel="noopener noreferrer">Source code reference <ExternalLink size={12}/></a>
           </div>:<p className="text-xs text-slate-400">This page is awaiting a matching Mesh v4 node.</p>}
           <p className="mt-2 text-xs text-slate-300">{peers.length} declared graph tethers</p>
           <div className="mt-2 flex flex-wrap gap-1">
