@@ -1,182 +1,255 @@
-import React, { useEffect, useState } from 'react';
-import { X, ExternalLink, Send, BrainCircuit, Tv, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, RotateCcw, Send, Share2, Tv, Video, PhoneOff } from 'lucide-react';
 import type { EnvironmentState } from '../types';
 import { quineMeshService } from '../services/quineMeshService.mjs';
 import { youtubeService } from '../services/youtubeService';
+import { createRoomId, fromInviteHash, inviteUrl, normalizeInvite } from '../services/gaiaInviteCard.mjs';
+import { createCrypticCall } from '../services/gaiaWebRTC.mjs';
 
-type Turn = { role: 'user' | 'assistant'; content: string; timestamp?: string };
-type CardStatus = { configured: boolean; sdk_installed: boolean; model: string };
+type Turn = {role:'user'|'assistant';content:string};
+type Provider = 'xai'|'gemini';
+type Status = {configured:boolean;sdk_installed:boolean;model:string};
+type FullStatus = Status&{gemini?:Status};
+type Invite = {title:string;videoId:string;roomId:string;createdAt:number;expiresAt:number;kind:string;meetUrl?:string};
 
-export const XYouTubeAICard: React.FC<{ envState: EnvironmentState }> = ({envState}) => {
-  const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState<CardStatus | null>(null);
-  const [prompt, setPrompt] = useState('');
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [showVideo, setShowVideo] = useState(true);
-  const videoId = envState.youtube.currentTrack?.id || '';
-  const selectedPlaylist = envState.youtube.activePlaylistId;
-  const playlistId = selectedPlaylist?.startsWith('PL') ? selectedPlaylist : undefined;
-  const watchUrl = /^[A-Za-z0-9_-]{11}$/.test(videoId)
-    ? youtubeService.getNativeWatchUrl({videoId,playlistId})
-    : 'https://www.youtube.com/';
-  const embedUrl = /^[A-Za-z0-9_-]{11}$/.test(videoId)
-    ? youtubeService.buildEmbedUrl({videoId,playlistId},false,true) : '';
-  const connected = quineMeshService.status().state === 'connected';
+const wss = String((import.meta as any).env?.VITE_GAIA_RTC_WSS||'');
+export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState})=>{
+  const [open,setOpen]=useState(false);
+  const [flipped,setFlipped]=useState(false);
+  const [opacity,setOpacity]=useState(.74);
+  const [invite,setInvite]=useState<Invite|null>(null);
+  const [meetUrl,setMeetUrl]=useState('');
+  const [notice,setNotice]=useState('');
+  const [provider,setProvider]=useState<Provider>('xai');
+  const [status,setStatus]=useState<FullStatus|null>(null);
+  const [mesh,setMesh]=useState(quineMeshService.status().state==='connected');
+  const [prompt,setPrompt]=useState('');
+  const [turns,setTurns]=useState<Turn[]>([]);
+  const [sid,setSid]=useState<string|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [callState,setCallState]=useState('not connected');
+  const [callError,setCallError]=useState('');
+  const [localStream,setLocalStream]=useState<MediaStream|null>(null);
+  const [remoteStream,setRemoteStream]=useState<MediaStream|null>(null);
+  const call=useRef<any>(null);
+  const localVideo=useRef<HTMLVideoElement|null>(null);
+  const remoteVideo=useRef<HTMLVideoElement|null>(null);
+  const videoId=invite?.videoId||envState.youtube.currentTrack?.id||'';
+  const validVideo=/^[A-Za-z0-9_-]{11}$/.test(videoId);
+  const watchUrl=validVideo?youtubeService.getNativeWatchUrl({videoId}):'https://www.youtube.com/';
+  const embed=validVideo?youtubeService.buildEmbedUrl({videoId},false,true):'';
+  const aiStatus=provider==='gemini'?status?.gemini:status;
+  const ready=mesh&&!!aiStatus?.configured&&!!aiStatus?.sdk_installed;
 
-  useEffect(() => {
-    const show = () => setOpen(true);
-    window.addEventListener('gaia:open-x-card', show);
-    return () => window.removeEventListener('gaia:open-x-card', show);
-  }, []);
+  useEffect(()=>quineMeshService.subscribe((x:any)=>setMesh(x.state==='connected')),[]);
+  useEffect(()=>{
+    const listener=()=>setOpen(true);
+    window.addEventListener('gaia:open-x-card',listener);
+    try{const item=fromInviteHash(window.location.hash) as Invite|null;
+      if(item){setInvite(item);setMeetUrl(item.meetUrl||'');setOpen(true);}
+    }catch{setNotice('Invalid or expired invitation');}
+    return()=>window.removeEventListener('gaia:open-x-card',listener);
+  },[]);
+  useEffect(()=>()=>{call.current?.close();call.current=null;},[]);
+  useEffect(()=>{if(localVideo.current)localVideo.current.srcObject=localStream},[localStream,flipped]);
+  useEffect(()=>{if(remoteVideo.current)remoteVideo.current.srcObject=remoteStream},[remoteStream,flipped]);
+  useEffect(()=>{
+    if(!open||!mesh){setStatus(null);return}
+    let live=true;
+    quineMeshService.xaiCardStatus().then((value:FullStatus)=>{if(live)setStatus(value)})
+      .catch(()=>{if(live)setStatus(null)});
+    return()=>{live=false};
+  },[open,mesh]);
+  useEffect(()=>{
+    if(!open||!mesh){setSid(null);setTurns([]);return}
+    let id='';try{id=sessionStorage.getItem('gaia-xcard-private-'+provider)||''}catch{}
+    if(!id){setSid(null);setTurns([]);return}
+    let live=true;
+    quineMeshService.xaiCardHistory(id,30).then((data:any)=>{
+      if(!live)return;
+      setSid(id);
+      setTurns(Array.isArray(data.messages)?data.messages.filter((x:any)=>
+        (x.role==='user'||x.role==='assistant')&&typeof x.content==='string'):[]);
+    }).catch(()=>{if(live){setSid(null);setTurns([])}});
+    return()=>{live=false};
+  },[open,mesh,provider]);
 
-  useEffect(() => {
-    if (!open) return;
-    let active = true;
-    if (quineMeshService.status().state !== 'connected') {
-      setStatus(null);
-      setError('Local Quine bridge is not paired. Run mesh connect in HyperTerminal.');
-      return;
-    }
-    setError('');
-    quineMeshService.xaiCardStatus().then((result: CardStatus) => {
-      if (active) setStatus(result);
-    }).catch((err: Error) => {
-      if (active) setError('xAI card status unavailable: ' + err.message);
-    });
-    let saved = '';
-    try { saved = sessionStorage.getItem('gaia-x-card-session') || ''; } catch {}
-    if (saved) {
-      quineMeshService.xaiCardHistory(saved,30).then((data: any) => {
-        if (!active) return;
-        setSessionId(saved);
-        setTurns(Array.isArray(data.messages)
-          ? data.messages.filter((m: any) => ['user','assistant'].includes(m.role) && typeof m.content==='string')
-          : []);
-      }).catch(() => {
-        // Unavailable history is not replaced by synthetic dialogue.
-      });
-    }
-    return () => { active = false; };
-  }, [open]);
-
-  const send = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const message = prompt.trim();
-    if (!message || busy) return;
-    if (quineMeshService.status().state !== 'connected') {
-      setError('Pair the local Quine bridge with mesh connect before using xAI.');
-      return;
-    }
-    if (!status?.configured || !status.sdk_installed) {
-      setError('The local host needs the xAI SDK and XAI_API_KEY configured.');
-      return;
-    }
-    setBusy(true); setError('');
-    try {
-      const result = await quineMeshService.xaiCardChat(message,videoId,sessionId);
-      if (result.provider !== 'xai-sdk' || typeof result.reply !== 'string' || !result.saved)
-        throw new Error('No verified provider response returned');
-      const id = result.sessionId as string;
-      setSessionId(id);
-      try { sessionStorage.setItem('gaia-x-card-session',id); } catch {}
-      setTurns(previous => [...previous.slice(-28),
-        {role:'user',content:message},{role:'assistant',content:result.reply}]);
+  function createInvite():Invite{
+    if(!validVideo)throw Error('Select a valid YouTube video first');
+    const createdAt=Date.now();
+    const item=normalizeInvite({videoId,roomId:createRoomId(),title:'GAIA Watch Session',
+      createdAt,expiresAt:createdAt+86400000,meetUrl}) as Invite;
+    setInvite(item);return item;
+  }
+  function getLink(item:Invite){
+    try{return inviteUrl(item,window.location.origin+window.location.pathname)}
+    catch{return inviteUrl(item)}
+  }
+  async function share(){
+    try{
+      const item=invite||createInvite(),url=getLink(item);
+      if(typeof navigator.share==='function'){
+        await navigator.share({title:item.title,text:'GAIA Watch Invitation',url});
+        setNotice('Shared through your device');
+      }else if(navigator.clipboard?.writeText){
+        await navigator.clipboard.writeText(url);
+        setNotice('Copied for Google Voice, chat or messages');
+      }else setNotice(url);
+    }catch(e:any){if(e?.name!=='AbortError')setNotice(String(e?.message||e))}
+  }
+  async function copy(){
+    try{await navigator.clipboard.writeText(getLink(invite||createInvite()));setNotice('Copied invitation URL')}
+    catch(e:any){setNotice('Copy unavailable: '+String(e?.message||e))}
+  }
+  function sendMail(){
+    try{window.location.href='mailto:?subject='+encodeURIComponent('GAIA Watch Session')+
+      '&body='+encodeURIComponent('Invitation:\n'+getLink(invite||createInvite()))}
+    catch(e:any){setNotice(String(e?.message||e))}
+  }
+  function sendText(){
+    try{window.location.href='sms:?body='+encodeURIComponent('GAIA Watch: '+getLink(invite||createInvite()))}
+    catch(e:any){setNotice(String(e?.message||e))}
+  }
+  async function ask(e:React.FormEvent){
+    e.preventDefault();if(!prompt.trim()||busy)return;
+    if(!ready){setError('Pair local Quine mesh and configure the selected AI provider');return}
+    setBusy(true);setError('');
+    try{
+      const question=prompt.trim();
+      const result=await quineMeshService.xaiCardChat(question,videoId,sid,provider);
+      const expected=provider==='gemini'?'gemini-openai-sdk':'xai-sdk';
+      if(result.provider!==expected||!result.saved||typeof result.reply!=='string')
+        throw Error('No verified provider response');
+      setSid(result.sessionId);
+      try{sessionStorage.setItem('gaia-xcard-private-'+provider,result.sessionId)}catch{}
+      setTurns(old=>[...old.slice(-28),{role:'user',content:question},
+        {role:'assistant',content:result.reply}]);
       setPrompt('');
-    } catch (cause: any) {
-      setError('xAI request not completed: ' + String(cause?.message || cause));
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(previous => !previous)}
-        aria-label="Open YouTube and X AI card"
-        className="fixed top-16 right-4 z-40 pointer-events-auto rounded-xl border border-cyan-500/60 bg-slate-950/90 px-3 py-2 text-xs font-mono font-bold text-cyan-200 shadow-lg hover:bg-slate-800"
-      >
-        𝕏 · YouTube · AI
-      </button>
-      {open && (
-        <aside
-          role="dialog"
-          aria-label="YouTube and xAI assistant"
-          className="fixed right-4 top-28 z-50 pointer-events-auto flex h-[min(76vh,700px)] w-[min(92vw,430px)] flex-col overflow-hidden rounded-2xl border border-cyan-400/60 bg-slate-950 text-slate-100 shadow-2xl"
-        >
-          <header className="flex items-center justify-between gap-2 border-b border-slate-700 p-3">
-            <span className="flex items-center gap-2 font-semibold text-sm">
-              <BrainCircuit size={17} /> GAIA · X/Grok + YouTube
-            </span>
-            <button type="button" title="Close card" aria-label="Close card"
-              onClick={() => setOpen(false)}
-              className="rounded-lg p-1 hover:bg-slate-800"><X size={18}/></button>
-          </header>
-          <section className="border-b border-slate-800 p-3">
-            <div className="flex items-center justify-between gap-2 pb-2">
-              <span className="text-xs text-slate-300 flex items-center gap-1"><Tv size={14}/> Real YouTube player</span>
-              <div className="flex items-center gap-2 text-xs">
-                <button type="button" onClick={() => setShowVideo(!showVideo)} className="text-cyan-300 underline">
-                  {showVideo?'Hide':'Show'}
-                </button>
-                <a href={watchUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-cyan-300 underline">
-                  Open YouTube <ExternalLink size={12}/>
-                </a>
-              </div>
+    }catch(e:any){setError('AI unavailable: '+String(e?.message||e))}
+    finally{setBusy(false)}
+  }
+  function connect(){
+    setCallError('');
+    if(!wss){setCallError('Cryptic WSS signaling is not deployed. Google Meet can be used instead.');return}
+    try{
+      call.current?.close();
+      const room=invite?.roomId||createInvite().roomId;
+      call.current=createCrypticCall({roomId:room,signalingUrl:wss,
+        onState:(e:any)=>setCallState(e.state),
+        onRemoteStream:(stream:MediaStream|null)=>setRemoteStream(stream)});
+      call.current.connect();
+    }catch(e:any){setCallError(String(e?.message||e))}
+  }
+  async function accept(){
+    try{
+      if(!call.current)throw Error('Connect signaling first');
+      const stream=await call.current.startCall();
+      setLocalStream(stream);
+    }catch(e:any){setCallError(String(e?.message||e))}
+  }
+  function hangup(){call.current?.hangup();setLocalStream(null);setRemoteStream(null);setCallState('idle')}
+  const button='rounded-lg border border-cyan-400/40 bg-black/25 px-2 py-1.5 text-xs text-cyan-100 hover:bg-cyan-400/20';
+  const style:React.CSSProperties={backgroundColor:'rgba(2,6,23,'+opacity+')',
+    backdropFilter:'blur(18px)',boxShadow:'0 20px 60px rgba(0,0,0,.35)'};
+  return (<>
+    <button onClick={()=>setOpen(!open)} className="pointer-events-auto fixed right-4 top-16 z-40 rounded-xl border border-cyan-400/50 bg-slate-950/80 px-3 py-2 text-xs text-cyan-100">
+      𝕏 · GAIA INVITE
+    </button>
+    {open&&<aside role="dialog" aria-label="GAIA dual-side invitation card"
+      style={style} className="pointer-events-auto fixed right-3 top-28 z-50 w-[min(95vw,440px)] overflow-hidden rounded-2xl border border-cyan-400/60 text-white">
+      <header className="flex items-center justify-between border-b border-white/20 p-3">
+        <strong className="text-xs">GAIA · CRYPTIC COMMUNICATIONS</strong>
+        <div className="flex gap-2">
+          <button className={button} onClick={()=>setFlipped(!flipped)}><RotateCcw size={14} className="inline"/> Flip</button>
+          <button className={button} aria-label="Close invite card" onClick={()=>setOpen(false)}><X size={14}/></button>
+        </div>
+      </header>
+      <div className="flex gap-2 px-3 pt-2 text-[11px]">
+        <label htmlFor="gaia-opacity">Opacity</label>
+        <input id="gaia-opacity" type="range" min=".25" max=".95" step=".05"
+          value={opacity} onChange={e=>setOpacity(Number(e.target.value))} className="flex-1"/>
+        <span>{Math.round(opacity*100)}%</span>
+      </div>
+      <div className="relative h-[min(66vh,660px)]" style={{perspective:'1200px'}}>
+        <div className="relative h-full w-full" style={{transform:flipped?'rotateY(180deg)':'rotateY(0deg)',
+          transformStyle:'preserve-3d',transition:'transform .55s ease'}}>
+          <section aria-hidden={flipped} className="absolute inset-0 flex flex-col gap-3 overflow-y-auto p-3"
+            style={{backfaceVisibility:'hidden',pointerEvents:flipped?'none':'auto'}}>
+            <div className="flex items-center justify-between">
+              <strong className="text-xs"><Tv size={13} className="inline"/> Watch Together</strong>
+              <a className={button} target="_blank" rel="noopener noreferrer" href={watchUrl}>Open YouTube ↗</a>
             </div>
-            {showVideo && embedUrl && (
-              <iframe
-                title="YouTube embedded player"
-                src={embedUrl}
-                className="aspect-video w-full rounded-lg border-0"
-                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
-            )}
-            <p className="mt-2 text-[11px] text-slate-400">
-              YouTube login stays on youtube.com. Embedded playback does not give GAIA account access or a video transcript.
-            </p>
-          </section>
-          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] text-slate-400">
-            <span>Provider: {status?.configured && status?.sdk_installed && connected
-              ? 'xAI SDK configured' : 'Not connected'}</span>
-            <span>{status?.model || 'Provider unverified'}</span>
-            <button type="button" title="Refresh provider status"
-              onClick={() => {setOpen(false);setTimeout(()=>setOpen(true),0);}}
-              className="text-cyan-300"><RefreshCw size={14}/></button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-3 py-2 text-xs" aria-live="polite">
-            {turns.length === 0 && (
-              <p className="text-slate-400">No stored conversation displayed. Ask about the linked video or another topic. Actual video contents must be supplied separately.</p>
-            )}
-            {turns.map((turn,i) => (
-              <div key={i} className="mb-3 rounded-lg border border-slate-800 p-2">
-                <strong className="mb-1 block text-cyan-300">{turn.role==='assistant'?'xAI response':'You'}</strong>
-                <p className="whitespace-pre-wrap break-words">{turn.content}</p>
+            {embed&&<iframe title="YouTube Watch Session" src={embed} className="aspect-video w-full rounded border-0"
+              allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>}
+            <p className="text-[11px] text-slate-300">YouTube authentication stays on youtube.com; invites contain no account tokens.</p>
+            <div className="rounded-xl border border-white/20 p-2">
+              <p className="mb-2 text-xs">Share this watch session:</p>
+              <div className="grid grid-cols-4 gap-1">
+                <button className={button} onClick={share}><Share2 size={13} className="inline"/> Share</button>
+                <button className={button} onClick={copy}>Copy</button>
+                <button className={button} onClick={sendMail}>Email</button>
+                <button className={button} onClick={sendText}>SMS</button>
               </div>
-            ))}
-          </div>
-          {error && <div role="alert" className="mx-3 mb-1 rounded bg-rose-950/50 p-2 text-xs text-rose-300">{error}</div>}
-          <form onSubmit={send} className="flex items-end gap-2 border-t border-slate-800 p-3">
-            <textarea
-              aria-label="Message to xAI"
-              placeholder="Ask Grok…"
-              rows={2} maxLength={2400} value={prompt}
-              onChange={e => setPrompt(e.target.value)}
-              className="min-h-[55px] flex-1 resize-none rounded-lg border border-slate-700 bg-black/60 p-2 text-xs text-white"
-            />
-            <button type="submit" disabled={busy||!prompt.trim()}
-              className="rounded-lg bg-cyan-600 p-2 text-white disabled:opacity-40"
-              aria-label="Send message to xAI">
-              <Send size={18}/>
-            </button>
-          </form>
-        </aside>
-      )}
-    </>
-  );
+              {invite&&<p className="mt-2 break-words text-[10px]">Room: {invite.roomId}</p>}
+              {notice&&<p role="status" className="mt-2 break-words text-[11px] text-cyan-200">{notice}</p>}
+            </div>
+            <p className="text-[11px] text-slate-400">Shared card = public watch reference, not private terminal permission.</p>
+            <button className={button} onClick={()=>setFlipped(true)}>Flip to AI and call →</button>
+          </section>
+          <section aria-hidden={!flipped} className="absolute inset-0 flex flex-col gap-2 overflow-y-auto p-3"
+            style={{backfaceVisibility:'hidden',transform:'rotateY(180deg)',pointerEvents:flipped?'auto':'none'}}>
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-xs">Grok / Gemini · Video Call</strong>
+              <select aria-label="AI provider" className="rounded bg-black/60 p-1 text-xs" value={provider}
+                onChange={e=>setProvider(e.target.value as Provider)}>
+                <option value="xai">Grok · xAI</option><option value="gemini">Gemini · OpenAI SDK</option>
+              </select>
+            </div>
+            <p className="text-[11px] text-slate-300">{ready?'AI host configured':'AI provider not connected'} · video has no automatic transcript</p>
+            <div className="min-h-[60px] max-h-[130px] space-y-1 overflow-y-auto">
+              {turns.length?turns.map((t,i)=><p key={i} className="rounded bg-black/30 p-2 text-xs break-words whitespace-pre-wrap">
+                <strong>{t.role==='user'?'You: ':'AI: '}</strong>{t.content}</p>):
+                <p className="text-[11px] text-slate-400">Private AI history stays with the paired host; it is not shared with invitees.</p>}
+            </div>
+            <form onSubmit={ask} className="flex gap-2">
+              <input value={prompt} onChange={e=>setPrompt(e.target.value)} maxLength={2400}
+                placeholder="Ask selected AI" aria-label="AI prompt" className="min-w-0 flex-1 rounded bg-black/40 p-2 text-xs"/>
+              <button type="submit" className={button} disabled={!prompt.trim()||busy||!ready}><Send size={15}/></button>
+            </form>
+            {error&&<p role="alert" className="text-xs text-rose-300">{error}</p>}
+            <div className="border-t border-white/15 pt-2">
+              <p className="mb-1 text-xs font-semibold">Google Meet / Google Chat</p>
+              <input value={meetUrl} onChange={e=>{setMeetUrl(e.target.value);setInvite(null)}}
+                placeholder="Paste a real Google Meet invite link (optional)"
+                aria-label="Meet URL" className="mb-2 w-full rounded bg-black/40 p-2 text-xs"/>
+              <div className="flex gap-2">
+                <a className={button} href={invite?.meetUrl||meetUrl||'https://meet.google.com/new'}
+                  rel="noopener noreferrer" target="_blank">Open Google Meet</a>
+                <a className={button} href="https://chat.google.com/"
+                  rel="noopener noreferrer" target="_blank">Google Chat</a>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-400">Create a Meet in Google; paste its link and share a new card. Meet is not embedded.</p>
+            </div>
+            <div className="border-t border-white/15 pt-2">
+              <p className="mb-1 text-xs font-semibold"><Video size={13} className="inline"/> Cryptic WebRTC · STUN</p>
+              <div className="flex flex-wrap gap-1">
+                <button className={button} onClick={connect}>Connect</button>
+                <button className={button} onClick={accept}>Start / accept media</button>
+                <button className={button} onClick={hangup}><PhoneOff size={12} className="inline"/> Hang up</button>
+              </div>
+              <p className="mt-1 text-[11px]">State: {callState}</p>
+              {callError&&<p role="alert" className="text-xs text-rose-300">{callError}</p>}
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <video ref={localVideo} muted autoPlay playsInline aria-label="Local video" className="aspect-video w-full rounded bg-black"/>
+                <video ref={remoteVideo} autoPlay playsInline aria-label="Remote video" className="aspect-video w-full rounded bg-black"/>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-400">Calls require a deployed WSS server and explicit media consent. STUN alone is insufficient.</p>
+            </div>
+            <button className={button} onClick={()=>setFlipped(false)}>← Invite front</button>
+          </section>
+        </div>
+      </div>
+    </aside>}
+  </>);
 };
