@@ -6,6 +6,7 @@ import { GaiaCognitionPanel } from './components/GaiaCognitionPanel';
 import { startNexusSync } from './services/nexusEvolutionSync.mjs';
 import { YouTubeBackgroundPlayer } from './components/YouTubeBackgroundPlayer';
 import { XYouTubeAICard } from './components/XYouTubeAICard';
+import { CrystallineCrossvoidGate } from './components/CrystallineCrossvoidGate';
 import { NexusSystemPages } from './components/NexusSystemPages';
 import { EnvironmentState } from './types';
 import { DEFAULT_RGB_LED_CONFIG } from './services/colorProfileService';
@@ -82,6 +83,8 @@ export function App() {
       <GaiaCognitionPanel />
       {/* Private/live data requires each device to pair with its local bridge. */}
       <NexusSystemPages />
+      {/* Public CrossVoid visual entry. All authentication remains at Cryptic News. */}
+      <CrystallineCrossvoidGate />
     </div>
   );
 }
