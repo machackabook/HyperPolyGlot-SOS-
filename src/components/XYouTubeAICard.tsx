@@ -5,6 +5,7 @@ import { quineMeshService } from '../services/quineMeshService.mjs';
 import { youtubeService } from '../services/youtubeService';
 import { createRoomId, fromInviteHash, inviteUrl, normalizeInvite } from '../services/gaiaInviteCard.mjs';
 import { createCrypticCall } from '../services/gaiaWebRTC.mjs';
+import { gaiaCommsState } from '../services/gaiaCommsState.mjs';
 
 type Turn = {role:'user'|'assistant';content:string};
 type Provider = 'xai'|'gemini';
@@ -53,7 +54,7 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
     }catch{setNotice('Invalid or expired invitation');}
     return()=>window.removeEventListener('gaia:open-x-card',listener);
   },[]);
-  useEffect(()=>()=>{call.current?.close();call.current=null;},[]);
+  useEffect(()=>()=>{call.current?.close();call.current=null;gaiaCommsState.reset();},[]);
   useEffect(()=>{if(localVideo.current)localVideo.current.srcObject=localStream},[localStream,flipped]);
   useEffect(()=>{if(remoteVideo.current)remoteVideo.current.srcObject=remoteStream},[remoteStream,flipped]);
   useEffect(()=>{
@@ -133,13 +134,23 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
   }
   function connect(){
     setCallError('');
-    if(!wss){setCallError('Cryptic WSS signaling is not deployed. Google Meet can be used instead.');return}
+    if(!wss){setCallError('Cryptic WSS signaling is not deployed. Google Meet can be used instead.');gaiaCommsState.record({phase:'signaling-unconfigured',signaling:'unconfigured'});return}
     try{
       call.current?.close();
       const room=invite?.roomId||createInvite().roomId;
       call.current=createCrypticCall({roomId:room,signalingUrl:wss,
-        onState:(e:any)=>setCallState(e.state),
-        onRemoteStream:(stream:MediaStream|null)=>setRemoteStream(stream)});
+        onState:(e:any)=>{
+          setCallState(e.state);
+          gaiaCommsState.record({phase:e.state,
+            signaling:e.state==='signaling-connected'?'connected':
+              e.state==='signaling-disconnected'?'disconnected':
+              e.state==='signaling-error'?'error':undefined,
+            remotePeerCount:e.peers});
+        },
+        onRemoteStream:(stream:MediaStream|null)=>{
+          setRemoteStream(stream);
+          gaiaCommsState.record({remoteMedia:!!stream?.getTracks().length});
+        }});
       call.current.connect();
     }catch(e:any){setCallError(String(e?.message||e))}
   }
@@ -148,9 +159,10 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
       if(!call.current)throw Error('Connect signaling first');
       const stream=await call.current.startCall();
       setLocalStream(stream);
+      gaiaCommsState.record({localMedia:!!stream?.getTracks().length});
     }catch(e:any){setCallError(String(e?.message||e))}
   }
-  function hangup(){call.current?.hangup();setLocalStream(null);setRemoteStream(null);setCallState('idle')}
+  function hangup(){call.current?.hangup();setLocalStream(null);setRemoteStream(null);setCallState('idle');gaiaCommsState.record({phase:'idle',localMedia:false,remoteMedia:false})}
   const button='rounded-lg border border-cyan-400/40 bg-black/25 px-2 py-1.5 text-xs text-cyan-100 hover:bg-cyan-400/20';
   const style:React.CSSProperties={backgroundColor:'rgba(2,6,23,'+opacity+')',
     backdropFilter:'blur(18px)',boxShadow:'0 20px 60px rgba(0,0,0,.35)'};
