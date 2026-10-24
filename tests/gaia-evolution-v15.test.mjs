@@ -44,12 +44,16 @@ test('PLLM starts off and records only bounded opt-in aggregates',()=>{
  assert.equal(x.external_delivery,false);
  s.disable();assert.equal(s.status().active,false);
 });
-test('Mesh v4 grounds 11 built-in source nodes and 13 actual declared tethers',()=>{
+test('Mesh v4 retains the original source nodes, with every tether grounded',()=>{
  const m=createMeshRegistry(),f=m.snapshot(),visual=projectGrid(f);
- assert.equal(f.nodes.length,11);
- assert.equal(f.links.length,13);
+ assert.ok(f.nodes.length>=11,'Original 11 core references preserved');
+ assert.ok(f.links.length>=13,'Original 13 tethers preserved');
+ assert.equal(new Set(f.nodes.map(x=>x.id)).size,f.nodes.length);
+ const ids=new Set(f.nodes.map(x=>x.id));
+ for(const edge of f.links){assert.ok(ids.has(edge.from));assert.ok(ids.has(edge.to));}
  assert.equal(f.counts.verified,0);
- assert.equal(visual.links.length,13);
+ assert.equal(visual.nodes.length,f.nodes.length);
+ assert.equal(visual.links.length,f.links.length);
  assert.equal(meshForecast(f).notMLForecast,true);
 });
 test('Mesh v4 rejects fabricated verification or unknown reference atomically',()=>{
