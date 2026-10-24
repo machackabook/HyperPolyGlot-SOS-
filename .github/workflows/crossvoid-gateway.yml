@@ -1,0 +1,35 @@
+name: CrossVoid Security Contracts
+on:
+  push:
+    paths:
+      - 'cloudflare/crossvoid-worker.mjs'
+      - 'cloudflare/crossvoid-migration.sql'
+      - 'src/services/crossvoidGatewayV1.mjs'
+      - 'src/components/CrystallineCrossvoidGate.tsx'
+      - 'tests/crossvoid-gateway.test.mjs'
+      - '.github/workflows/crossvoid-gateway.yml'
+  pull_request:
+    paths:
+      - 'cloudflare/crossvoid-worker.mjs'
+      - 'cloudflare/crossvoid-migration.sql'
+      - 'src/services/crossvoidGatewayV1.mjs'
+      - 'src/components/CrystallineCrossvoidGate.tsx'
+      - 'tests/crossvoid-gateway.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  crossvoid-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static parse checks
+        run: |
+          node --check cloudflare/crossvoid-worker.mjs
+          node --check src/services/crossvoidGatewayV1.mjs
+      - name: Execute worker and routing contracts
+        run: node --test tests/crossvoid-gateway.test.mjs
