@@ -61,7 +61,7 @@ async function validateImported(item){
  if(!Number.isSafeInteger(item.timestamp)||item.timestamp<0||item.timestamp>Date.now()+60000)
   throw TypeError('Invalid ledger timestamp');
  if(typeof item.id!=='string'||!/^[a-f0-9]{24}$/.test(item.id))throw TypeError('Invalid record identifier');
- const normalized=normalizePayload(item);
+ const normalized=normalizePayload({kind:item.kind,intent:item.intent,sourceRef:item.sourceRef,metrics:item.metrics});
  const material={id:item.id,timestamp:item.timestamp,...normalized};
  if(item.hash!==await sha256(canonical(material)))throw Error('Fingerprint mismatch');
  return Object.freeze({...material,hash:item.hash});
