@@ -1,0 +1,43 @@
+name: GOD Forge Capability Contracts
+on:
+  push:
+    paths:
+      - 'bridge/god_network_gate.py'
+      - 'bridge/golden_army_forge.py'
+      - 'bridge/gaia_mcp_server.py'
+      - 'bridge/quine_local_bridge.py'
+      - 'tests/test_god_forge.py'
+      - '.github/workflows/god-forge-contracts.yml'
+  pull_request:
+    paths:
+      - 'bridge/god_network_gate.py'
+      - 'bridge/golden_army_forge.py'
+      - 'bridge/gaia_mcp_server.py'
+      - 'bridge/quine_local_bridge.py'
+      - 'tests/test_god_forge.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  god-forge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install standard hosted test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "aiohttp>=3.9,<4" "mcp>=2,<3"
+      - name: Python static parsing
+        run: |
+          python -m py_compile bridge/god_network_gate.py bridge/golden_army_forge.py bridge/gaia_mcp_server.py bridge/quine_local_bridge.py tests/test_god_forge.py
+      - name: Test GOD policy and real local worker computations
+        run: python -m unittest discover -s tests -p test_god_forge.py -v
+      - name: Import actual MCP v2 tool registry
+        run: |
+          python -c "import sys;sys.path.insert(0,'bridge');import gaia_mcp_server as g;assert g.mcp is not None;print('GOD and Forge MCP v2 server registered')"
