@@ -37,8 +37,8 @@ interface GoogleDriveEngramsModalProps {
 export const MASTER_GEMINI_MD_DEFAULT = `# GEMINI.MD // OMNI-NEXUS & SCRIBE MASTER ARCHITECTURAL MEMORY ENGRAMS
 Version: 2.0-SOVEREIGN // Tier 5 Maximum Nexus Core
 Canonical High-Integer Prime Anchor: 137451921129154222
-Owner Account: machackabook@gmail.com
-Status: 100% OPERATIONAL & VERIFIED
+Owner Account: Not authenticated in this browser
+Status: Reference specification, not a live session
 
 ---
 
@@ -342,8 +342,8 @@ export const GoogleDriveEngramsModal: React.FC<GoogleDriveEngramsModalProps> = (
                   <span className="text-cyan-400 font-bold">/mnt/httpdfs/gdrive/</span>
                 </div>
                 <div className="p-2 bg-slate-950 rounded border border-slate-800">
-                  <span className="text-slate-400 block text-[9px]">CONNECTED USER</span>
-                  <span className="text-emerald-400 font-bold">machackabook@gmail.com</span>
+                  <span className="text-slate-400 block text-[9px]">ACCOUNT CONNECTION</span>
+                  <span className="text-amber-400 font-bold">Not signed in · connect explicitly</span>
                 </div>
                 <div className="p-2 bg-slate-950 rounded border border-slate-800">
                   <span className="text-slate-400 block text-[9px]">FILE SYSTEM</span>
