@@ -1,0 +1,58 @@
+name: Public Site Availability — Cryptic + HyperTerminal
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'src/**'
+      - 'public/**'
+      - 'vite.config.ts'
+      - 'wrangler.jsonc'
+      - '.github/workflows/site-availability.yml'
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-sites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check independent HTTPS origins and record evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          failures=0
+          urls=(
+            'https://crypticnews.org/'
+            'https://www.crypticnews.org/'
+            'https://machackabook.github.io/HyperPolyGlot-SOS-/'
+          )
+          for url in "${urls[@]}"; do
+            echo "::group::Checking ${url}"
+            body="$(mktemp)"
+            code="$(curl --silent --show-error --location --max-time 30 \
+              --retry 2 --retry-delay 2 --output "${body}" \
+              --write-out '%{http_code}' "${url}")" || code='000'
+            bytes="$(wc -c < "${body}")"
+            echo "HTTP status: ${code}; bytes: ${bytes}"
+            head -c 300 "${body}" | tr '\n' ' ' || true
+            echo
+            if [[ ! "${code}" =~ ^2[0-9][0-9]$ ]] || [[ "${bytes}" -lt 300 ]]; then
+              echo "::error title=Website inaccessible::${url} returned HTTP ${code}, size ${bytes}"
+              failures=$((failures+1))
+            fi
+            rm -f "${body}"
+            echo "::endgroup::"
+          done
+          # Test dynamic source used by the current Pages index (not proof of a rendered app).
+          module_url='https://esm.sh/gh/machackabook/HyperPolyGlot-SOS-@main/src/App.tsx?deps=react@19.0.1,three@0.186.1&external=react'
+          module_code="$(curl --silent --show-error --location --max-time 45 \
+            --output /tmp/gaia-esm-module.mjs --write-out '%{http_code}' "${module_url}")" || module_code='000'
+          echo "React module HTTP: ${module_code}"
+          if [[ ! "${module_code}" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error title=Dynamic React import unavailable::esm.sh module status ${module_code}"
+            failures=$((failures+1))
+          fi
+          [[ "${failures}" -eq 0 ]]
