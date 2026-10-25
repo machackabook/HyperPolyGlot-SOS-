@@ -32,7 +32,7 @@
   <style>html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;background:#02050b;color:#e2f1ff}body{font-family:"Fira Code","JetBrains Mono",monospace}#runtime-error{display:none;color:#ffb4b4;background:#170809;max-width:740px;padding:18px;position:absolute;inset:25px auto auto 25px;z-index:1000;white-space:pre-wrap}#runtime-error:focus{outline:2px solid #00e5ff}</style>
 </head>
 <body>
-  <div id="root"></div><div id="runtime-error" role="alert" tabindex="-1"></div>
+  <div id="root"></div><div id="runtime-error" role="alert" tabindex="-1"></div><noscript><p style="margin:20px">JavaScript is needed for the full HyperTerminal. <a style="color:#00e5ff" href="https://crypticnews.org/">Open the canonical Cryptic News terminal</a>.</p></noscript>
   <script type="module">
     const SOURCE="https://esm.sh/gh/machackabook/HyperPolyGlot-SOS-@main/src/App.tsx?deps=react@19.0.1,three@0.186.1&external=react";
     Promise.all([import("react"),import("react-dom/client"),import(SOURCE)]).then(([React,DOM,Module])=>{
@@ -42,6 +42,13 @@
     }).catch(error=>{
       const alert=document.getElementById("runtime-error");
       alert.textContent="Unable to load the real HyperPolyGlot application from GitHub source. No substitute UI will be shown.\n"+String(error?.message||error);
+      const recovery=document.createElement("p");
+      recovery.textContent="The GitHub-hosted runtime could not start. The canonical deployed site is available separately.";
+      const link=document.createElement("a");
+      link.href="https://crypticnews.org/";
+      link.textContent="Open Cryptic News HyperTerminal";
+      link.style.cssText="display:inline-block;margin-top:12px;color:#00e5ff;text-decoration:underline";
+      alert.append(recovery,link);
       alert.style.display="block";alert.focus();
       console.error("HYPERPOLYGLOT_REAL_SOURCE_LOAD_FAILED",error);
     });
