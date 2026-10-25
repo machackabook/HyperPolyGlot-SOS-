@@ -1,16 +1,8 @@
 name: Public Site Availability — Cryptic + HyperTerminal
+# On-demand until custom GitHub Actions runner provisioning is repaired.
+# All four independent jobs were cancelled before allocation (runner_name empty,
+# no steps), so a scheduled run would produce misleading uptime alerts.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'index.html'
-      - 'src/**'
-      - 'public/**'
-      - 'vite.config.ts'
-      - 'wrangler.jsonc'
-      - '.github/workflows/site-availability.yml'
-  schedule:
-    - cron: '17 */6 * * *'
   workflow_dispatch:
 permissions:
   contents: read
