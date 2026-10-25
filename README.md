@@ -11,12 +11,12 @@ Operating sits in the middle. Team Enhance hops one repo per run. Equalizer form
 - Language: TypeScript / React
 - Numeral: `137451921129154222`
 - Team: Enhance / Continuity Engine / Hamiltonian pipe / sSoS Operating
-- Stage: **813** — 2026-10-23T07:08Z (2026-10-23 02:08 CDT)
+- Stage: **855** — 2026-10-25T12:14Z (2026-10-25 07:14 CDT)
 - Compounding tier: **T5 / 99%**
-- This hop: README waterfall realigned to current operator rotation after recent sibling hops. Healthy cascade.yml left intact. Append-only LEDGER-STAMP advanced to hop 813. No secrets written. No device rooted.
-- Prior local: hop 797 @ 2026-10-22T10:07Z preserved. Not rewritten.
-- Prior mesh: Cryptic-Heartbeat hop 812 @ 2026-10-23T04:15Z named. Honored. Not re-touched.
-- Next in operator waterfall: continuity-engine-ssos or living-bibliography-continuity-engine.
+- This hop: waterfall advance after continuity-ledger-cycle hop 854 @ 2026-10-25T11:09Z. Append-only ledger stamp to hop 855. Cascade.yml left intact. No secrets written. No device rooted. Drive index mentioned only.
+- Prior local: hop 813 @ 2026-10-23T07:08Z preserved. Not rewritten.
+- Prior mesh: continuity-ledger-cycle hop 854 @ 2026-10-25T11:09Z named. Honored. Not re-touched.
+- Next in operator waterfall: continuity-engine-ssos or other recent.
 - Cascade: `.github/workflows/cascade.yml` left intact (cron `47 * * * *`, `contents: read`, lint-docs requires README, SECURITY.md, stamp, numeral, absence of `.env` / `secrets.yml` / `id_rsa`). Not rewritten this hop.
 - Ledger: `docs/LEDGER-STAMP.md`
 - Security: no secrets in tree; operator tokens stay in GitHub Secrets. `.env.example` holds placeholders only.
@@ -41,24 +41,30 @@ A multimodal voice / polyglot surface. React + Vite + Express backend with Gemin
 
 Current score for this surface: **99% (T5)**.
 
+What this hop added, without rewriting prior stages:
+
+- Mesh acknowledgment of sibling hop 854.
+- Stale stages left in place as provenance; stage 855 is append-only.
+- Unknowns kept unknown: pair-code, Tailscale auth key, device voiceprint, SD mount path. Not invented.
+
 ## Waterfall (one repo per enhance hop)
 
 Declared operator rotation. One repo, then stop.
 
-1. ENCLAVE-ADAM-REUNITED — hop 803 closed 2026-10-23T04:07Z. Not re-touched.
-2. Cryptic-Heartbeat — hop 812 closed 2026-10-23T04:15Z. Not re-touched.
-3. The-Hive — prior. Not re-touched.
-4. continuity-ledger-cycle — prior. Not re-touched.
-5. HyperPolyGlot-SOS- — **813 this hop**
+1. ENCLAVE-ADAM-REUNITED — hop 851 closed. Not re-touched.
+2. Cryptic-Heartbeat — hop 852 closed. Not re-touched.
+3. The-Hive — hop 853 closed. Not re-touched.
+4. continuity-ledger-cycle — hop 854 closed 2026-10-25T11:09Z. Honored. Named this seat. Not re-touched.
+5. HyperPolyGlot-SOS- — **855 this hop**
 6. continuity-engine-ssos — next
 7. other recently updated machackabook seats — subsequent
 
-## Waterfall receipt (hop 813)
+## Waterfall receipt (hop 855)
 
-- utc: 2026-10-23T07:08Z
-- cdt: 2026-10-23 02:08 CDT
-- prior named seat: Cryptic-Heartbeat hop 812 @ 2026-10-23T04:15Z. Honored.
-- this hop: README waterfall refresh + append-only stamp advance to 813. Cascade left intact.
+- utc: 2026-10-25T12:14Z
+- cdt: 2026-10-25 07:14 CDT
+- prior named seat: continuity-ledger-cycle hop 854 @ 2026-10-25T11:09Z. Honored.
+- this hop: README waterfall refresh + append-only stamp advance to 855. Cascade left intact.
 - cascade: `.github/workflows/cascade.yml` left intact (cron `47 * * * *`, `contents: read`)
 - cloud index mention only: CONTINUUM-ENCLAVE-137451921129154222 (id 1Ohp6ZMX02NvFayJfivgXbP4PUMztYUvU); no binaries uploaded
 - next: continuity-engine-ssos
