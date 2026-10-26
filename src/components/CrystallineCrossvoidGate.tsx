@@ -23,6 +23,9 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
  const [receipt,setReceipt]=useState('');
  const [voiceState,setVoiceState]=useState('not-started');
  const [crypticStatus,setCrypticStatus]=useState<'unchecked'|'checking'|'verified'|'unavailable'>('unchecked');
+ const [remoteReadiness,setRemoteReadiness]=useState<{assets:boolean|null;events:boolean|null;world:boolean|null}>({
+  assets:null,events:null,world:null
+ });
  const last=useRef<{x:number,y:number}|null>(null);
  const auth=crossvoidSecurityStatus();
  const destinations={
@@ -40,6 +43,7 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
      setCrypticStatus('unavailable');
    },4500);
    setCrypticStatus('checking');
+   setRemoteReadiness({assets:null,events:null,world:null});
    fetch('https://crypticnews.org/api/crossvoid/status',{
      method:'GET',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal
    }).then(async r=>{
@@ -47,7 +51,14 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
      const body=await r.json();
      if(body?.protocol!=='crossvoid-v1'||body?.source!=='crypticnews-worker')
        throw new Error('Unexpected gateway identity');
-     if(!controller.signal.aborted)setCrypticStatus('verified');
+     if(!controller.signal.aborted){
+       setCrypticStatus('verified');
+       setRemoteReadiness({
+         assets:typeof body.static_assets_configured==='boolean'?body.static_assets_configured:null,
+         events:typeof body.journey_db_configured==='boolean'?body.journey_db_configured:null,
+         world:typeof body.multiplayer_signaling_configured==='boolean'?body.multiplayer_signaling_configured:null
+       });
+     }
    }).catch(()=>{if(!controller.signal.aborted)setCrypticStatus('unavailable')})
      .finally(()=>clearTimeout(timeout));
    return()=>{clearTimeout(timeout);controller.abort()};
@@ -188,11 +199,17 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
       Voice recognition may use your browser's speech service. Use ENTER CROSSVOID without a microphone.
      </p>}
      <p role="status" className="mt-1 text-[10px]">
-       Public Cryptic gateway: {crypticStatus==='verified'?'online · response contract verified':
+       Public Cryptic gateway: {crypticStatus==='verified'?'CrossVoid status route responding · service readiness below':
          crypticStatus==='checking'?'checking live route…':
          crypticStatus==='unavailable'?'unavailable · do not assume delivery':
          'not checked'}.
      </p>
+     {crypticStatus==='verified'&&<p className="mt-1 text-[10px]" role="status">
+       Actual Cryptic Worker bindings — Vite assets: {remoteReadiness.assets===null?'not reported':remoteReadiness.assets?'configured':'missing'};
+       visit database: {remoteReadiness.events===null?'not reported':remoteReadiness.events?'configured':'missing'};
+       multiplayer: {remoteReadiness.world===null?'not reported':remoteReadiness.world?'configured':'not connected'}.
+       A configured binding is not proof of a successful page load, event write or two-device session.
+     </p>}
      <p className="mt-1 text-[10px]">Backend authorization status: {auth.authorizedByStaticPage?'verified':'not asserted by static UI'}</p>
     </div>
    </div>
