@@ -136,9 +136,12 @@ async function handle(req,env){
     return responseJson({error:'invalid-public-event'},400,origin);
   if(!env.EVENT_DB)return responseJson({recorded:false,error:'event-store-not-configured'},503,origin);
   try{
-   await env.EVENT_DB.prepare(
+   const inserted=await env.EVENT_DB.prepare(
      'INSERT INTO crossvoid_events (stage,event,source,created_at) VALUES (?1,?2,?3,?4)'
    ).bind(record.stage,record.event,record.source,Date.now()).run();
+   // Never issue an accountability receipt merely because the call returned.
+   if(inserted?.success!==true)
+     return responseJson({recorded:false,error:'event-write-not-confirmed'},503,origin);
    return responseJson({recorded:true},200,origin);
   }catch{return responseJson({recorded:false,error:'event-store-unavailable'},503,origin)}
  }
