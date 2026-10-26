@@ -5,7 +5,7 @@
  */
 const DEST='https://crypticnews.org/api/portal/event';
 const CONSENT='cryptic.portal.journey.v1';
-const STAGES=new Set(['surface','crypt','crossvoid','ethernet','forge-link']);
+const STAGES=new Set(['surface','crypt','crystalline','crossvoid','ethernet','forge-link']);
 const EVENTS=new Set(['open','flip','traverse','portal','exit','site-link']);
 const SOURCES=new Set(['github-pages','crypticnews']);
 function storage(){
