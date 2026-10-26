@@ -35,6 +35,10 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
  useEffect(()=>{
    if(!open)return;
    const controller=new AbortController();
+   const timeout=setTimeout(()=>{
+     controller.abort();
+     setCrypticStatus('unavailable');
+   },4500);
    setCrypticStatus('checking');
    fetch('https://crypticnews.org/api/crossvoid/status',{
      method:'GET',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal
@@ -44,8 +48,9 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
      if(body?.protocol!=='crossvoid-v1'||body?.source!=='crypticnews-worker')
        throw new Error('Unexpected gateway identity');
      if(!controller.signal.aborted)setCrypticStatus('verified');
-   }).catch(()=>{if(!controller.signal.aborted)setCrypticStatus('unavailable')});
-   return()=>controller.abort();
+   }).catch(()=>{if(!controller.signal.aborted)setCrypticStatus('unavailable')})
+     .finally(()=>clearTimeout(timeout));
+   return()=>{clearTimeout(timeout);controller.abort()};
  },[open]);
  function report(s:Stage,event:'open'|'flip'|'traverse'|'portal'|'exit'|'site-link'){
    const source=window.location.hostname==='crypticnews.org'?'crypticnews':'github-pages';
