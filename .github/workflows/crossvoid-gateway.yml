@@ -5,6 +5,8 @@ on:
       - 'cloudflare/crossvoid-worker.mjs'
       - 'cloudflare/crossvoid-migration.sql'
       - 'src/services/crossvoidGatewayV1.mjs'
+      - 'src/services/crypticPortalTelemetry.mjs'
+      - 'src/cloudflare-public-worker.mjs'
       - 'src/components/CrystallineCrossvoidGate.tsx'
       - 'tests/crossvoid-gateway.test.mjs'
       - '.github/workflows/crossvoid-gateway.yml'
@@ -13,6 +15,8 @@ on:
       - 'cloudflare/crossvoid-worker.mjs'
       - 'cloudflare/crossvoid-migration.sql'
       - 'src/services/crossvoidGatewayV1.mjs'
+      - 'src/services/crypticPortalTelemetry.mjs'
+      - 'src/cloudflare-public-worker.mjs'
       - 'src/components/CrystallineCrossvoidGate.tsx'
       - 'tests/crossvoid-gateway.test.mjs'
   workflow_dispatch:
@@ -31,5 +35,7 @@ jobs:
         run: |
           node --check cloudflare/crossvoid-worker.mjs
           node --check src/services/crossvoidGatewayV1.mjs
+          node --check src/services/crypticPortalTelemetry.mjs
+          node --check src/cloudflare-public-worker.mjs
       - name: Execute worker and routing contracts
         run: node --test tests/crossvoid-gateway.test.mjs
