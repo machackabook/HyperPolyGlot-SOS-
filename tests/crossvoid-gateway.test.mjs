@@ -132,3 +132,51 @@ test('Cryptic public host forwards visitor events and rejects unconfigured stora
  assert.equal(r.status,503);
  assert.equal((await r.json()).recorded,false);
 });
+
+
+import {validateJourney,reportJourney,setJourneyConsent,journeyConsent}
+ from '../src/services/crypticPortalTelemetry.mjs';
+
+test('public and CrypticNews crystalline stages agree on exact consented event schema',()=>{
+ const pages=validateJourney({stage:'crystalline',event:'flip',source:'github-pages'});
+ const cryptic=validateJourney({stage:'crystalline',event:'flip',source:'crypticnews'});
+ assert.equal(pages.stage,cryptic.stage);
+ assert.throws(()=>validateJourney({stage:'crystalline',event:'flip',source:'crypticnews',gps:1}));
+});
+
+test('guest journey events never report unless the visitor opts in',async()=>{
+ const saved=globalThis.localStorage;
+ const settings=new Map();
+ globalThis.localStorage={getItem:k=>settings.get(k)||null,setItem:(k,v)=>settings.set(k,v)};
+ try{
+  let requests=0;
+  const stub=async()=>{requests++;return new Response(JSON.stringify({recorded:true}),{status:200})};
+  assert.equal(journeyConsent(),'unset');
+  let response=await reportJourney({stage:'crystalline',event:'flip',source:'github-pages'},stub);
+  assert.equal(response.status,'not-sent');
+  assert.equal(requests,0);
+  setJourneyConsent(true);
+  response=await reportJourney({stage:'crystalline',event:'flip',source:'github-pages'},stub);
+  assert.equal(response.status,'recorded');
+  assert.equal(requests,1);
+  setJourneyConsent(false);
+  response=await reportJourney({stage:'ethernet',event:'portal',source:'crypticnews'},stub);
+  assert.equal(response.status,'not-sent');
+  assert.equal(requests,1);
+ }finally{
+  if(saved===undefined)delete globalThis.localStorage;
+  else globalThis.localStorage=saved;
+ }
+});
+
+test('public Worker routes actual Vite static assets when a binding exists',async()=>{
+ let path=null;
+ const ASSETS={fetch:async(req)=>{path=new URL(req.url).pathname;return new Response('<!doctype html><title>NEXUS real build fixture</title>',{
+  status:200,headers:{'content-type':'text/html'}})}};
+ const r=await publicWorker.fetch(new Request(BASE+'/'),{ASSETS});
+ assert.equal(r.status,200);
+ assert.equal(path,'/');
+ assert.match(await r.text(),/NEXUS real build fixture/);
+ const status=await publicWorker.fetch(new Request(BASE+'/api/status'),{ASSETS});
+ assert.equal((await status.json()).static_assets_configured,true);
+});
