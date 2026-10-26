@@ -22,6 +22,7 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
  const [consent,setConsent]=useState<TelemetryConsent>(()=>journeyConsent());
  const [receipt,setReceipt]=useState('');
  const [voiceState,setVoiceState]=useState('not-started');
+ const [crypticStatus,setCrypticStatus]=useState<'unchecked'|'checking'|'verified'|'unavailable'>('unchecked');
  const last=useRef<{x:number,y:number}|null>(null);
  const auth=crossvoidSecurityStatus();
  const destinations={
@@ -31,11 +32,27 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
  };
  useEffect(()=>{if(!open)return;const onKey=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false)};
   window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[open]);
+ useEffect(()=>{
+   if(!open)return;
+   const controller=new AbortController();
+   setCrypticStatus('checking');
+   fetch('https://crypticnews.org/api/crossvoid/status',{
+     method:'GET',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal
+   }).then(async r=>{
+     if(!r.ok)throw new Error('Remote gateway did not respond');
+     const body=await r.json();
+     if(body?.protocol!=='crossvoid-v1'||body?.source!=='crypticnews-worker')
+       throw new Error('Unexpected gateway identity');
+     if(!controller.signal.aborted)setCrypticStatus('verified');
+   }).catch(()=>{if(!controller.signal.aborted)setCrypticStatus('unavailable')});
+   return()=>controller.abort();
+ },[open]);
  function report(s:Stage,event:'open'|'flip'|'traverse'|'portal'|'exit'|'site-link'){
-  void reportJourney({stage:s,event,source:'github-pages'}).then(r=>{
-   if(r.status==='unavailable')setReceipt('Reporting unavailable; no receipt claimed.');
-   else if(r.status==='recorded')setReceipt('Public journey event recorded by Cryptic News.');
-  });
+   const source=window.location.hostname==='crypticnews.org'?'crypticnews':'github-pages';
+   void reportJourney({stage:s,event,source}).then(r=>{
+     if(r.status==='unavailable')setReceipt('Reporting unavailable; no receipt claimed.');
+     else if(r.status==='recorded')setReceipt('Public journey event recorded by Cryptic News.');
+   }).catch(()=>setReceipt('Reporting unavailable; no receipt claimed.'));
  }
  function enter(){setStage('surface');setOpen(true);setReceipt('');report('surface','open')}
  function move(next:Stage,kind:'flip'|'traverse'|'portal'){
@@ -165,6 +182,12 @@ export const CrystallineCrossvoidGate:React.FC=()=>{
       Voice navigation: {voiceState}. The voice phrase is never accepted as identity proof or an operator authorization.
       Voice recognition may use your browser's speech service. Use ENTER CROSSVOID without a microphone.
      </p>}
+     <p role="status" className="mt-1 text-[10px]">
+       Public Cryptic gateway: {crypticStatus==='verified'?'online · response contract verified':
+         crypticStatus==='checking'?'checking live route…':
+         crypticStatus==='unavailable'?'unavailable · do not assume delivery':
+         'not checked'}.
+     </p>
      <p className="mt-1 text-[10px]">Backend authorization status: {auth.authorizedByStaticPage?'verified':'not asserted by static UI'}</p>
     </div>
    </div>
