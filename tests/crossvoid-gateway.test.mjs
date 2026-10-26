@@ -63,6 +63,36 @@ test('redirects only to explicitly declared destinations',async()=>{
  assert.equal(a.status,302);
  assert.match(a.headers.get('location'),/HyperPolyGlot-SOS-\/actions$/);
 });
+test('public CrossVoid status reports actual binding availability, not fictitious deployment',async()=>{
+ const offline=await request('/api/crossvoid/status');
+ assert.equal(offline.status,200);
+ const absent=await offline.json();
+ assert.equal(absent.static_assets_configured,false);
+ assert.equal(absent.journey_db_configured,false);
+ assert.equal(absent.multiplayer_signaling_configured,false);
+ assert.equal(absent.statusEvidence,'active-cloudflare-worker-bindings');
+ const actual=await worker.fetch(new Request(BASE+'/api/crossvoid/status'),{
+  ASSETS:{fetch:async()=>new Response('html')},
+  EVENT_DB:{prepare:()=>({})}
+ });
+ const bound=await actual.json();
+ assert.equal(bound.static_assets_configured,true);
+ assert.equal(bound.journey_db_configured,true);
+ assert.equal(bound.multiplayer_signaling_configured,false);
+});
+
+test('D1 failed write does not fabricate a visitor receipt',async()=>{
+ const failing={prepare(){return {bind(){return {async run(){return {success:false}}}}}}};
+ const r=await worker.fetch(new Request(BASE+'/api/portal/event',{
+  method:'POST',headers:{origin:'https://crypticnews.org','content-type':'text/plain'},
+  body:JSON.stringify({stage:'crystalline',event:'flip',source:'crypticnews'})
+ }),{EVENT_DB:failing});
+ assert.equal(r.status,503);
+ const payload=await r.json();
+ assert.equal(payload.recorded,false);
+ assert.equal(payload.error,'event-write-not-confirmed');
+});
+
 test('valid opt-in metadata cannot claim success without D1 storage',async()=>{
  const r=await request('/api/portal/event',{method:'POST',headers:{
   origin:'https://machackabook.github.io','content-type':'text/plain'
