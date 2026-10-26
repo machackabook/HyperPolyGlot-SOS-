@@ -78,7 +78,12 @@ async function handle(req,env){
   return responseJson({protocol:'crossvoid-v1',source:'crypticnews-worker',
     operatorAccess:'requires-verified-Cloudflare-Access-JWT',
     actions:'release-and-build-workflows-not-browser-auth',
-    publicTerminal:TERMINAL,sourceMode:'source-derived-crystalline'},200,origin);
+    publicTerminal:TERMINAL,sourceMode:'source-derived-crystalline',
+    // Only actual Worker bindings count as operational evidence.
+    static_assets_configured:!!(env.ASSETS&&typeof env.ASSETS.fetch==='function'),
+    journey_db_configured:!!(env.EVENT_DB&&typeof env.EVENT_DB.prepare==='function'),
+    multiplayer_signaling_configured:false,
+    statusEvidence:'active-cloudflare-worker-bindings'},200,origin);
  }
  if(req.method==='GET'&&url.pathname==='/crossvoid/go/terminal')
   return Response.redirect(TERMINAL,302);
