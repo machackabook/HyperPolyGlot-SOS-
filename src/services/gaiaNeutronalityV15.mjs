@@ -66,6 +66,7 @@ async function validateImported(item){
  if(item.hash!==await sha256(canonical(material)))throw Error('Fingerprint mismatch');
  return Object.freeze({...material,hash:item.hash});
 }
+/** @param {{storage?: Storage|null, maxEntries?: number}} options */
 export function createNeutronalityFabric({storage=null,maxEntries=256}={}){
  if(!Number.isSafeInteger(maxEntries)||maxEntries<1||maxEntries>2048)throw RangeError('Invalid ledger budget');
  let entries=[],conflicts=0,serial=0;

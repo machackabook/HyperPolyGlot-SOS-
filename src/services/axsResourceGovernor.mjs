@@ -44,6 +44,7 @@ export function createAxsResourceGovernor({maxParticles=4000, windowSize=60, rev
     };
   };
   return {
+    /** @param {number} durationMs @param {number|null} presentedAtMs */
     observe(durationMs,presentedAtMs=null){
       if (!finite(durationMs) || durationMs<0 || durationMs>60000) return describe();
       if(presentedAtMs!==null && finite(presentedAtMs)){

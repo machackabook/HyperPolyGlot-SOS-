@@ -16,7 +16,7 @@ test('Never connect with short or malformed credentials',async()=>{
 });
 test('No network ping before authentication',async()=>{
  const m=createQuineMeshService();
- await assert.rejects(m.ping(),/not.*connected/i);
+ await assert.rejects(m.ping(),/No authenticated localhost connection/i);
  await assert.rejects(m.scribeStatus(),/not paired/i);
 });
 test('Scribe search requires bounded real request, not generated answers',async()=>{

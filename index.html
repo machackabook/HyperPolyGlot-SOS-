@@ -7,11 +7,8 @@
   <meta name="description" content="The actual AI Studio HyperPolyGlot React/Three.js application, compiled from the live main branch with its torus knot and terminal.">
   <meta name="theme-color" content="#02050b">
   <link rel="canonical" href="https://crypticnews.org/">
-  <link rel="preconnect" href="https://esm.sh" crossorigin>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&family=Orbitron:wght@600;800;900&display=swap">
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script>
     // Retire cached versions of the old Cryptic landing shell without deleting user data.
     if ('serviceWorker' in navigator && /(^|\.)crypticnews\.org$/.test(location.hostname)) {
@@ -26,32 +23,10 @@
       }
     }
   </script>
-  <script type="importmap">
-  {"imports":{"react":"https://esm.sh/react@19.0.1","react/jsx-runtime":"https://esm.sh/react@19.0.1/jsx-runtime","react-dom/client":"https://esm.sh/react-dom@19.0.1/client?external=react"}}
-  </script>
   <style>html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;background:#02050b;color:#e2f1ff}body{font-family:"Fira Code","JetBrains Mono",monospace}#runtime-error{display:none;color:#ffb4b4;background:#170809;max-width:740px;padding:18px;position:absolute;inset:25px auto auto 25px;z-index:1000;white-space:pre-wrap}#runtime-error:focus{outline:2px solid #00e5ff}</style>
 </head>
 <body>
   <div id="root"></div><div id="runtime-error" role="alert" tabindex="-1"></div><noscript><p style="margin:20px">JavaScript is needed for the full HyperTerminal. <a style="color:#00e5ff" href="https://crypticnews.org/">Open the canonical Cryptic News terminal</a>.</p></noscript>
-  <script type="module">
-    const SOURCE="https://esm.sh/gh/machackabook/HyperPolyGlot-SOS-@main/src/App.tsx?deps=react@19.0.1,three@0.186.1&external=react";
-    Promise.all([import("react"),import("react-dom/client"),import(SOURCE)]).then(([React,DOM,Module])=>{
-      if(typeof Module.default!=="function")throw new Error("Current GitHub source has no usable application entrypoint.");
-      DOM.createRoot(document.getElementById("root")).render(React.createElement(Module.default));
-      document.documentElement.dataset.source="machackabook/HyperPolyGlot-SOS-:main";
-    }).catch(error=>{
-      const alert=document.getElementById("runtime-error");
-      alert.textContent="Unable to load the real HyperPolyGlot application from GitHub source. No substitute UI will be shown.\n"+String(error?.message||error);
-      const recovery=document.createElement("p");
-      recovery.textContent="The GitHub-hosted runtime could not start. The canonical deployed site is available separately.";
-      const link=document.createElement("a");
-      link.href="https://crypticnews.org/";
-      link.textContent="Open Cryptic News HyperTerminal";
-      link.style.cssText="display:inline-block;margin-top:12px;color:#00e5ff;text-decoration:underline";
-      alert.append(recovery,link);
-      alert.style.display="block";alert.focus();
-      console.error("HYPERPOLYGLOT_REAL_SOURCE_LOAD_FAILED",error);
-    });
-  </script>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

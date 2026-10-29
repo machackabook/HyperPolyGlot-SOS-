@@ -1,48 +1,27 @@
 name: Public Site Availability — Cryptic + HyperTerminal
-# On-demand until custom GitHub Actions runner provisioning is repaired.
-# All four independent jobs were cancelled before allocation (runner_name empty,
-# no steps), so a scheduled run would produce misleading uptime alerts.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
 permissions:
   contents: read
 jobs:
-  http-checks:
-    name: HTTPS ${{ matrix.label }}
+  browser-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: Cryptic-apex
-            url: https://crypticnews.org/
-          - label: Cryptic-www
-            url: https://www.crypticnews.org/
-          - label: GitHub-Pages
-            url: https://machackabook.github.io/HyperPolyGlot-SOS-/
-          - label: React-module
-            url: https://esm.sh/gh/machackabook/HyperPolyGlot-SOS-@main/src/App.tsx?deps=react@19.0.1,three@0.186.1&external=react
+    timeout-minutes: 10
     steps:
-      - name: Measure public HTTPS response
-        env:
-          SITE_URL: ${{ matrix.url }}
-          SITE_LABEL: ${{ matrix.label }}
-        shell: bash
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check GitHub Pages application rendering
+        run: node tools/browser-smoke.mjs https://machackabook.github.io/HyperPolyGlot-SOS-/
+      - name: Check canonical domain and deployed release health
+        if: always()
         run: |
-          set -euo pipefail
-          output="$(mktemp)"
-          code="$(curl --silent --show-error --location --max-time 40 \
-            --retry 2 --retry-delay 1 -o "${output}" -w '%{http_code}' "${SITE_URL}")" || code=000
-          bytes="$(wc -c < "${output}")"
-          echo "site=${SITE_LABEL}"
-          echo "http_status=${code}"
-          echo "response_bytes=${bytes}"
-          echo "site=${SITE_LABEL}" >> "${GITHUB_STEP_SUMMARY}"
-          echo "http_status=${code}" >> "${GITHUB_STEP_SUMMARY}"
-          echo "response_bytes=${bytes}" >> "${GITHUB_STEP_SUMMARY}"
-          if [[ "${code}" != 2?? ]] || [[ "${bytes}" -lt 300 ]]; then
-            echo "::error title=${SITE_LABEL} unavailable::HTTP ${code} (${bytes} bytes)"
-            exit 1
-          fi
-          echo "HTTPS response confirmed for ${SITE_LABEL}"
+          curl --fail --silent --show-error --location --max-time 30 https://crypticnews.org/healthz | tee /tmp/cryptic-health.json
+          node --input-type=module -e "import fs from 'node:fs'; const h=JSON.parse(fs.readFileSync('/tmp/cryptic-health.json')); if(h.ok!==true) process.exit(1)"
+          curl --fail --silent --show-error --location --max-time 30 https://www.crypticnews.org/ > /dev/null

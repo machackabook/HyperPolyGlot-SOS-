@@ -114,7 +114,7 @@ export function createMeshRegistry(){
  }
  return {snapshot,ingest,subscribe(fn){
    if(typeof fn!=='function')throw TypeError('Callback required');
-   observers.add(fn);return()=>observers.delete(fn);
+   observers.add(fn);return()=>{observers.delete(fn);};
  }};
 }
 export const gaiaMeshV4=createMeshRegistry();
