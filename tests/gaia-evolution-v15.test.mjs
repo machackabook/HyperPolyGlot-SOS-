@@ -14,7 +14,8 @@ test('V15 accepts only bounded project metadata and stores full digests',async()
  assert.match(e.hash,/^[a-f0-9]{64}$/);
  assert.equal(e.fingerprint,e.hash.slice(0,16));
  assert.equal(f.summary().entries,1);
- assert.throws(()=>f.ingest({...payload,rawKeys:'private typed text'}),/metadata only/);
+ await assert.rejects(f.ingest({...payload,rawKeys:'private typed text'}),/metadata only/);
+ assert.equal(f.summary().entries,1);
 });
 test('V15 durable snapshot readback validates full fingerprint and deduplicates',async()=>{
  const data=new Map();

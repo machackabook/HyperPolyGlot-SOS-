@@ -26,6 +26,7 @@ export function makeBathymetry(nx, ny, complexity=0.5) {
 }
 const face=(a,b)=>2*a*b/(a+b);
 export class VariableDepthLeapfrog {
+  /** @param {{nx?:number,ny?:number,dx?:number,g?:number,dt?:number,damping?:number,depth?:ArrayLike<number>}} options */
   constructor({nx=96,ny=64,dx=1,g=9.81,dt=0.11,damping=0.003,depth}={}) {
     if (!Number.isInteger(nx)||!Number.isInteger(ny)||nx<3||ny<3||nx*ny>200000) throw new RangeError('grid size');
     if (![dx,g,dt,damping].every(Number.isFinite)||dx<=0||g<=0||dt<=0||damping<0||damping>=1) throw new RangeError('grid constants');

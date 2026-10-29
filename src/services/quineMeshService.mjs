@@ -130,6 +130,7 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw new RangeError('History limit 1-100');
   return read('/v1/xai/card/history','?sessionId='+encodeURIComponent(sessionId)+'&limit='+limit);
  }
+ /** @param {string} message @param {string} videoId @param {string|null} sessionId @param {string} provider */
  function xaiCardChat(message,videoId,sessionId=null,provider='xai'){
   if(!['xai','gemini'].includes(provider))throw new TypeError('Unknown AI provider');
   if(typeof message!=='string'||!message.trim()||message.length>2400)
@@ -258,6 +259,7 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
 
 
  function godStatus(){return read('/v1/god/status')}
+ /** @param {string} capability @param {string|null} destination */
  function godDecide(capability,destination=null){
   if(typeof capability!=='string'||! /^[a-z][a-z0-9.]{1,63}$/.test(capability))
    throw new TypeError('Invalid GOD capability');
@@ -266,6 +268,7 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   return writeMount('/v1/god/decision',{capability,...(destination?{destination}:{})});
  }
  function forgeStatus(){return read('/v1/forge/status')}
+ /** @param {string} capability @param {string|null} destination */
  function forgePlan(capability,destination=null){
   if(typeof capability!=='string'||! /^[a-z][a-z0-9.]{1,63}$/.test(capability))
    throw new TypeError('Invalid Forge capability');
@@ -289,6 +292,6 @@ export function createQuineMeshService({fetchFn,WebSocketCtor,clock}={}){
   godStatus,godDecide,forgeStatus,forgePlan,forgeCompute,forgeGitHubRead,
   listMounts,cloneMount,linkMount,status:snapshot,
   subscribe(cb){if(typeof cb!=='function')throw new TypeError('Callback required');
-   listeners.add(cb);return()=>listeners.delete(cb)}};
+   listeners.add(cb);return()=>{listeners.delete(cb);}}};
 }
 export const quineMeshService=createQuineMeshService();

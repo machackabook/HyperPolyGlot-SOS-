@@ -293,7 +293,7 @@ export const XYouTubeAICard: React.FC<{envState:EnvironmentState}> = ({envState}
                 Up to 8 MiB, PyMuPDF on host. Source bytes never sent to xAI or Gemini.
               </p>
               {pdfNotice&&<p role="status" className="break-words text-cyan-200">{pdfNotice}</p>}
-            </div>
+            </div>}
             <div className="min-h-[60px] max-h-[130px] space-y-1 overflow-y-auto">
               {turns.length?turns.map((t,i)=><p key={i} className="rounded bg-black/30 p-2 text-xs break-words whitespace-pre-wrap">
                 <strong>{t.role==='user'?'You: ':'AI: '}</strong>{t.content}</p>):

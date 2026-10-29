@@ -19,7 +19,7 @@ export function iceConfiguration({turnServers=[]}={}){
   });
   return {iceServers:[...STUN,...safe],iceCandidatePoolSize:2};
 }
-export function createCrypticCall({roomId,signalingUrl,onState=()=>{},onRemoteStream=()=>{},
+export function createCrypticCall({roomId,signalingUrl,onState=(_event)=>{},onRemoteStream=(_stream)=>{},
                                   WebSocketCtor=globalThis.WebSocket,
                                   PeerCtor=globalThis.RTCPeerConnection,
                                   acquireMedia=()=>globalThis.navigator.mediaDevices.getUserMedia({audio:true,video:true}),
