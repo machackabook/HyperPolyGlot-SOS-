@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ConvergenceForgePanel } from './components/ConvergenceForgePanel';
 import { VisualRenderer3D } from './components/VisualRenderer3D';
 import { HyperTerminal } from './components/HyperTerminal';
 import { ResonanceConsole } from './components/ResonanceConsole';
@@ -96,6 +97,7 @@ export function App() {
       <NexusSystemPages />
       {/* Public CrossVoid visual entry. All authentication remains at Cryptic News. */}
       <CrystallineCrossvoidGate />
+      <ConvergenceForgePanel />
     </div>
   );
 }
