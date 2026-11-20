@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { buildGaiaSystemInstruction } from './src/services/gaiaPersona.mjs';
 import { buildV5Lattice, buildManhattanPath, buildMerkleTree, createMerkleProof, verifyMerkleProof, mineNonce, verifyWork, runComputationalSelfTest } from './src/computational/gaiaComputeCore.mjs';
 import { encodeQcLdpc, qcSyndrome, decodeNormalizedMinSum, qcLdpcSelfTest } from './src/computational/qcLdpc.mjs';
+import { GAIA_COMPUTE_DECLARATION, executeGaiaCompute } from './src/computational/gaiaComputeTools.mjs';
 
 dotenv.config();
 
@@ -255,6 +256,7 @@ async function startServer() {
             ],
             config: {
               systemInstruction,
+              tools: [{ functionDeclarations: [GAIA_COMPUTE_DECLARATION] }],
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,
@@ -306,10 +308,59 @@ async function startServer() {
           });
         });
 
-        const parsed = JSON.parse(response.text || '{}');
+        let finalResponse = response;
+        const requestedCalls = (response.functionCalls || []).slice(0, 3);
+        let computeTrace: Array<{ name: string; ok: boolean }> = [];
+        if (requestedCalls.length > 0) {
+          const functionParts = requestedCalls.map((call: any) => {
+            try {
+              if (call.name !== 'gaia_compute') throw new Error('Unknown function');
+              const result = executeGaiaCompute(call.args || {});
+              computeTrace.push({ name: call.name, ok: true });
+              return { functionResponse: { name: call.name, response: { result } } };
+            } catch (toolError: any) {
+              computeTrace.push({ name: String(call.name || 'unknown'), ok: false });
+              return { functionResponse: { name: String(call.name || 'unknown'), response: { error: toolError?.message || String(toolError) } } };
+            }
+          });
+          const toolTurn = await apiKeyPool.executeWithFallback(async (toolClient) => {
+            return await toolClient.models.generateContent({
+              model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+              contents: [
+                ...safeHistory.map((c: any) => ({ role: c.role, parts: [{ text: c.text }] })),
+                { role: 'user', parts: [{ text: prompt }] },
+                response.candidates?.[0]?.content,
+                { role: 'user', parts: functionParts },
+              ].filter(Boolean),
+              config: {
+                systemInstruction,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    reply: { type: Type.STRING },
+                    speechText: { type: Type.STRING },
+                    sentiment: { type: Type.STRING },
+                    topology: { type: Type.STRING },
+                    primaryColor: { type: Type.STRING },
+                    secondaryColor: { type: Type.STRING },
+                    speed: { type: Type.NUMBER },
+                    gravity: { type: Type.NUMBER },
+                    turbulence: { type: Type.NUMBER },
+                    floatingGlyph: { type: Type.STRING },
+                  },
+                  required: ['reply', 'speechText', 'sentiment', 'topology', 'primaryColor', 'secondaryColor'],
+                },
+              },
+            });
+          });
+          finalResponse = toolTurn.result;
+        }
+        const parsed = JSON.parse(finalResponse.text || '{}');
         return res.json({
           source: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
           keyId: keyUsed.id,
+          computeTrace,
           ...parsed,
         });
       } catch (err: any) {
