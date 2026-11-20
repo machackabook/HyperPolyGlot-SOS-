@@ -257,105 +257,60 @@ async function startServer() {
             config: {
               systemInstruction,
               tools: [{ functionDeclarations: [GAIA_COMPUTE_DECLARATION] }],
+            },,
+          });
+        });
+
+        const requestedCalls = (response.functionCalls || []).slice(0, 3);
+        const computeTrace: Array<{ name: string; ok: boolean }> = [];
+        const functionParts = requestedCalls.map((call: any) => {
+          try {
+            if (call.name !== 'gaia_compute') throw new Error('Unknown function');
+            const result = executeGaiaCompute(call.args || {});
+            computeTrace.push({ name: call.name, ok: true });
+            return { functionResponse: { name: call.name, response: { result } } };
+          } catch (toolError: any) {
+            computeTrace.push({ name: String(call.name || 'unknown'), ok: false });
+            return { functionResponse: { name: String(call.name || 'unknown'), response: { error: toolError?.message || String(toolError) } } };
+          }
+        });
+
+        // Tool execution and schema-constrained final narration are separate turns.
+        // This preserves the JSON response contract without mixing tool calls and JSON mode.
+        const followupContents: any[] = [
+          ...safeHistory.map((c: any) => ({ role: c.role, parts: [{ text: c.text }] })),
+          { role: 'user', parts: [{ text: prompt }] },
+        ];
+        if (response.candidates?.[0]?.content) followupContents.push(response.candidates[0].content);
+        if (functionParts.length) followupContents.push({ role: 'user', parts: functionParts });
+
+        const finalTurn = await apiKeyPool.executeWithFallback(async (finalClient) => {
+          return await finalClient.models.generateContent({
+            model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+            contents: followupContents,
+            config: {
+              systemInstruction,
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                  reply: {
-                    type: Type.STRING,
-                    description: 'A complete, natural, context-aware conversational answer. Do not force a terminal format unless the user asks for commands.',
-                  },
-                  speechText: {
-                    type: Type.STRING,
-                    description: 'Concise spoken response for audio synthesis inside background visual.',
-                  },
-                  sentiment: {
-                    type: Type.STRING,
-                    description: 'Detected sentiment: analytical, energetic, alarm, tranquil, cosmic, chaos, creative.',
-                  },
-                  topology: {
-                    type: Type.STRING,
-                    description: '3D background topology: torus, tesseract, singularity, neural, galaxy, spindle, dna, galaxy_vfs, robotics_lab, protein_fold, earth_nasa.',
-                  },
-                  primaryColor: {
-                    type: Type.STRING,
-                    description: 'Primary glowing hex color code.',
-                  },
-                  secondaryColor: {
-                    type: Type.STRING,
-                    description: 'Secondary accent hex color code.',
-                  },
-                  speed: {
-                    type: Type.NUMBER,
-                    description: 'Velocity multiplier from 0.2 to 3.0.',
-                  },
-                  gravity: {
-                    type: Type.NUMBER,
-                    description: 'Gravitational tensor from 0.2 to 3.5.',
-                  },
-                  turbulence: {
-                    type: Type.NUMBER,
-                    description: 'Turbulence factor from 0.1 to 2.5.',
-                  },
-                  floatingGlyph: {
-                    type: Type.STRING,
-                    description: 'Symbolic glyph for 3D holographic projection.',
-                  },
+                  reply: { type: Type.STRING, description: 'Natural, context-aware conversational answer.' },
+                  speechText: { type: Type.STRING },
+                  sentiment: { type: Type.STRING },
+                  topology: { type: Type.STRING },
+                  primaryColor: { type: Type.STRING },
+                  secondaryColor: { type: Type.STRING },
+                  speed: { type: Type.NUMBER },
+                  gravity: { type: Type.NUMBER },
+                  turbulence: { type: Type.NUMBER },
+                  floatingGlyph: { type: Type.STRING },
                 },
                 required: ['reply', 'speechText', 'sentiment', 'topology', 'primaryColor', 'secondaryColor'],
               },
             },
           });
         });
-
-        let finalResponse = response;
-        const requestedCalls = (response.functionCalls || []).slice(0, 3);
-        let computeTrace: Array<{ name: string; ok: boolean }> = [];
-        if (requestedCalls.length > 0) {
-          const functionParts = requestedCalls.map((call: any) => {
-            try {
-              if (call.name !== 'gaia_compute') throw new Error('Unknown function');
-              const result = executeGaiaCompute(call.args || {});
-              computeTrace.push({ name: call.name, ok: true });
-              return { functionResponse: { name: call.name, response: { result } } };
-            } catch (toolError: any) {
-              computeTrace.push({ name: String(call.name || 'unknown'), ok: false });
-              return { functionResponse: { name: String(call.name || 'unknown'), response: { error: toolError?.message || String(toolError) } } };
-            }
-          });
-          const toolTurn = await apiKeyPool.executeWithFallback(async (toolClient) => {
-            return await toolClient.models.generateContent({
-              model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
-              contents: [
-                ...safeHistory.map((c: any) => ({ role: c.role, parts: [{ text: c.text }] })),
-                { role: 'user', parts: [{ text: prompt }] },
-                response.candidates?.[0]?.content,
-                { role: 'user', parts: functionParts },
-              ].filter(Boolean),
-              config: {
-                systemInstruction,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    reply: { type: Type.STRING },
-                    speechText: { type: Type.STRING },
-                    sentiment: { type: Type.STRING },
-                    topology: { type: Type.STRING },
-                    primaryColor: { type: Type.STRING },
-                    secondaryColor: { type: Type.STRING },
-                    speed: { type: Type.NUMBER },
-                    gravity: { type: Type.NUMBER },
-                    turbulence: { type: Type.NUMBER },
-                    floatingGlyph: { type: Type.STRING },
-                  },
-                  required: ['reply', 'speechText', 'sentiment', 'topology', 'primaryColor', 'secondaryColor'],
-                },
-              },
-            });
-          });
-          finalResponse = toolTurn.result;
-        }
+        const finalResponse = finalTurn.result;
         const parsed = JSON.parse(finalResponse.text || '{}');
         return res.json({
           source: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
