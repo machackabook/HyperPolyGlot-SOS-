@@ -21,6 +21,10 @@ Every Manhattan path requires at least ||u-v||1 hops. This constructor changes o
 
 For each nonzero a in GF(256), the exhaustive test checks a * inverse(a) = 1.
 
+## Server API integration
+
+The server exposes bounded JSON endpoints: GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; and POST /api/compute/pow. Request validation caps Merkle input at 4,096 leaves and proof-of-work at 1,000,000 attempts with difficulty limited to 20 leading-zero bits. The runtime-status response advertises the compute engine version and endpoint names. These are server APIs; they are not yet Gemini function-calling tools. The model must not claim it executed one unless an authorized host adapter actually invokes the endpoint and returns a result.
+
 ## Explicit proof boundary
 
 The fold transcript is NOT a SNARK, STARK, Nova folding scheme, zero-knowledge proof, or constant-time succinct verifier. It is a deterministic accumulator whose witness sequence is replayed during verification. A genuine recursive proof system needs a sound constraint system, commitment scheme, challenge derivation, proof generation, and an independent verifier.
