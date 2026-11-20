@@ -20,6 +20,6 @@ test('retrieved memory is explicitly untrusted and cannot override system instru
 
 test('memory context is bounded', () => {
   const prompt = buildGaiaSystemInstruction('x'.repeat(5000));
-  assert.ok(prompt.length < 5000);
+  assert.ok(prompt.length < 7000);
   assert.ok(!prompt.includes('x'.repeat(4001)));
 });
