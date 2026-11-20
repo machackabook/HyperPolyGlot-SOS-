@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildGaiaSystemInstruction } from './src/services/gaiaPersona.mjs';
 import { buildV5Lattice, buildManhattanPath, buildMerkleTree, createMerkleProof, verifyMerkleProof, mineNonce, verifyWork, runComputationalSelfTest } from './src/computational/gaiaComputeCore.mjs';
+import { encodeQcLdpc, qcSyndrome, decodeNormalizedMinSum, qcLdpcSelfTest } from './src/computational/qcLdpc.mjs';
 
 dotenv.config();
 
@@ -213,7 +214,7 @@ async function startServer() {
         model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash', mode: 'natural-conversation',
         ready: apiKeyPool.hasKeys() },
       mountBridge: 'separate-authenticated-localhost-service',
-      compute: { handler: 'GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; POST /api/compute/pow', engine: 'gaia-hypercube-v1' },
+      compute: { handler: 'GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; POST /api/compute/pow', engine: 'gaia-hypercube-v1 + qc-ldpc-z3' },
     });
   });
   // API endpoint: /api/chat
@@ -355,6 +356,27 @@ async function startServer() {
     } catch (err: any) {
       return res.status(400).json({ error: 'MERKLE_COMPUTATION_FAILED', message: err?.message || String(err) });
     }
+  });
+
+  app.get('/api/compute/qc-ldpc/self-test', (_req, res) => {
+    try { return res.json(qcLdpcSelfTest()); }
+    catch (err: any) { return res.status(500).json({ error: 'QC_LDPC_SELF_TEST_FAILED', message: err?.message || String(err) }); }
+  });
+
+  app.post('/api/compute/qc-ldpc/encode', (req, res) => {
+    const { message } = req.body || {};
+    try {
+      const codeword = encodeQcLdpc(message);
+      return res.json({ codeword: Array.from(codeword), syndrome: qcSyndrome(codeword), valid: true });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'QC_LDPC_ENCODE_FAILED', message: err?.message || String(err) });
+    }
+  });
+
+  app.post('/api/compute/qc-ldpc/decode', (req, res) => {
+    const { llr } = req.body || {};
+    try { return res.json(decodeNormalizedMinSum(llr)); }
+    catch (err: any) { return res.status(400).json({ error: 'QC_LDPC_DECODE_FAILED', message: err?.message || String(err) }); }
   });
 
   app.post('/api/compute/pow', (req, res) => {
