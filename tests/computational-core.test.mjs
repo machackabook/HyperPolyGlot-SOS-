@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {buildV5Lattice,manhattanDistance,buildManhattanPath,buildMerkleTree,createMerkleProof,verifyMerkleProof,mineNonce,verifyWork,GF256,foldTranscript,verifyFoldTranscript,runComputationalSelfTest} from '../src/computational/gaiaComputeCore.mjs';
+test('V5 lattice is 625 vertices and 2,000 unit edges',()=>{const l=buildV5Lattice();assert.equal(l.nodeCount,625);assert.equal(l.edgeCount,2000);for(const[a,b]of l.edges)assert.equal(manhattanDistance(l.nodes[a].coordinate,l.nodes[b].coordinate),1);});
+test('Manhattan path attains the L1 lower bound',()=>{const p=buildManhattanPath([0,1,2,3],[4,0,2,1]);assert.equal(p.hops,7);assert.equal(p.hops,p.lowerBound);assert.equal(p.optimal,true);assert.deepEqual(p.path.at(-1),[4,0,2,1]);});
+test('4,096-leaf Merkle tree has 8,191 nodes and 12 sibling hashes',()=>{const v=Array.from({length:4096},(_,i)=>'leaf-'+i),t=buildMerkleTree(v),p=createMerkleProof(t,4095);assert.equal(t.nodeCount,8191);assert.equal(t.depth,12);assert.equal(p.siblings.length,12);assert.equal(verifyMerkleProof(v[4095],p),true);assert.equal(verifyMerkleProof('tampered',p),false);});
+test('GF(256) inverse identity holds for every nonzero element',()=>{for(let a=1;a<256;a++)assert.equal(GF256.multiply(a,GF256.inverse(a)),1);assert.equal(GF256.add(0x53,0x53),0);});
+test('SHA-256d proof of work is independently verified',()=>{const r=mineNonce('unit-test',{difficultyBits:8,maxAttempts:100000});assert.equal(r.found,true);assert.equal(verifyWork('unit-test',r),true);assert.equal(verifyWork('other',r),false);});
+test('fold transcript replays deterministically and rejects changed witnesses',()=>{const w=[{hash:'a'},{syndrome:'zero'},{node:312}],a=w.reduce((s,x,i)=>foldTranscript(s,x,i),0n);assert.equal(verifyFoldTranscript(w,a),true);assert.equal(verifyFoldTranscript([...w,{tampered:true}],a),false);});
+test('integrated computational self-test passes every reported invariant',()=>{const r=runComputationalSelfTest();assert.equal(r.passed,true,JSON.stringify(r));});
