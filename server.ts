@@ -214,7 +214,7 @@ async function startServer() {
         model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash', mode: 'natural-conversation',
         ready: apiKeyPool.hasKeys() },
       mountBridge: 'separate-authenticated-localhost-service',
-      compute: { handler: 'GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; POST /api/compute/pow', engine: 'gaia-hypercube-v1 + qc-ldpc-z3' },
+      compute: { handler: 'GET /api/compute/self-test; GET /api/compute/qc-ldpc/self-test; POST /api/compute/qc-ldpc/encode; POST /api/compute/qc-ldpc/decode; POST /api/compute/path; POST /api/compute/merkle; POST /api/compute/pow', engine: 'gaia-hypercube-v1 + qc-ldpc-z3' },
     });
   });
   // API endpoint: /api/chat
