@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildGaiaSystemInstruction } from './src/services/gaiaPersona.mjs';
+import { buildV5Lattice, buildManhattanPath, buildMerkleTree, createMerkleProof, verifyMerkleProof, mineNonce, verifyWork, runComputationalSelfTest } from './src/computational/gaiaComputeCore.mjs';
 
 dotenv.config();
 
@@ -212,6 +213,7 @@ async function startServer() {
         model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash', mode: 'natural-conversation',
         ready: apiKeyPool.hasKeys() },
       mountBridge: 'separate-authenticated-localhost-service',
+      compute: { handler: 'GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; POST /api/compute/pow', engine: 'gaia-hypercube-v1' },
     });
   });
   // API endpoint: /api/chat
@@ -324,6 +326,46 @@ async function startServer() {
     });
   });
 
+
+  // Deterministic computational endpoints. Results are computed locally by the server.
+  app.get('/api/compute/self-test', (_req, res) => {
+    try { return res.json(runComputationalSelfTest()); }
+    catch (err: any) { return res.status(500).json({ error: 'COMPUTE_SELF_TEST_FAILED', message: err?.message || String(err) }); }
+  });
+
+  app.post('/api/compute/path', (req, res) => {
+    const { start, end } = req.body || {};
+    try {
+      const result = buildManhattanPath(start, end);
+      return res.json({ ...result, proof: 'hop-count equals the L1 lower bound' });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'INVALID_PATH_INPUT', message: err?.message || String(err) });
+    }
+  });
+
+  app.post('/api/compute/merkle', (req, res) => {
+    const { leaves, index } = req.body || {};
+    if (!Array.isArray(leaves) || leaves.length > 4096 || !Number.isInteger(index)) {
+      return res.status(400).json({ error: 'INVALID_MERKLE_INPUT', message: 'Supply a power-of-two leaf array (maximum 4,096) and an integer index.' });
+    }
+    try {
+      const tree = buildMerkleTree(leaves);
+      const proof = createMerkleProof(tree, index);
+      return res.json({ leafCount: tree.leafCount, nodeCount: tree.nodeCount, depth: tree.depth, root: tree.root, proof, proofValid: verifyMerkleProof(leaves[index], proof) });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'MERKLE_COMPUTATION_FAILED', message: err?.message || String(err) });
+    }
+  });
+
+  app.post('/api/compute/pow', (req, res) => {
+    const { header, difficultyBits = 8, startNonce = 0, maxAttempts = 100000 } = req.body || {};
+    if (typeof header !== 'string' || header.length > 4096 || !Number.isInteger(difficultyBits) || difficultyBits < 0 || difficultyBits > 20 ||
+        !Number.isSafeInteger(startNonce) || startNonce < 0 || !Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 1000000) {
+      return res.status(400).json({ error: 'INVALID_POW_INPUT', message: 'Invalid header, difficulty, nonce, or bounded attempt count.' });
+    }
+    const result = mineNonce(header, { difficultyBits, startNonce, maxAttempts });
+    return res.json({ ...result, independentlyVerified: result.found && verifyWork(header, result) });
+  });
 
   // API endpoint: /api/navigator
   // Provides contextual AI voice descriptions for VFS nodes as the user traverses the data orbital mesh
