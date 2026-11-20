@@ -21,8 +21,7 @@ export function gf2Rank(matrix) {
 export function encodeQcLdpc(message,profile=QC_LDPC_PROFILE) {
  if(!Array.isArray(message)&&!(message instanceof Uint8Array))throw new TypeError('message bits required');
  if(message.length!==profile.k||Array.from(message).some(b=>b!==0&&b!==1))throw new RangeError('message must contain k binary bits');
- const H=expandQcLdpc(profile),word=Uint8Array.from(message);
- for(let r=0;r<profile.m;r++){let parity=0;for(let c=0;c<profile.k;c++)parity^=H[r][c]&word[c];word=undefined;}
+ const H=expandQcLdpc(profile);
  const output=new Uint8Array(profile.n);output.set(message);
  for(let r=0;r<profile.m;r++){let parity=0;for(let c=0;c<profile.k;c++)parity^=H[r][c]&message[c];output[profile.k+r]=parity;}
  return output;
