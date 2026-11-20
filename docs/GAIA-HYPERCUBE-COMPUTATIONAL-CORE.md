@@ -23,7 +23,7 @@ For each nonzero a in GF(256), the exhaustive test checks a * inverse(a) = 1.
 
 ## Server API integration
 
-The server exposes bounded JSON endpoints: GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; and POST /api/compute/pow. Request validation caps Merkle input at 4,096 leaves and proof-of-work at 1,000,000 attempts with difficulty limited to 20 leading-zero bits. The runtime-status response advertises the compute engine version and endpoint names. These are server APIs; they are not yet Gemini function-calling tools. The model must not claim it executed one unless an authorized host adapter actually invokes the endpoint and returns a result.
+The server exposes bounded JSON endpoints: GET /api/compute/self-test; POST /api/compute/path; POST /api/compute/merkle; and POST /api/compute/pow; GET /api/compute/qc-ldpc/self-test; POST /api/compute/qc-ldpc/encode; and POST /api/compute/qc-ldpc/decode. Request validation caps Merkle input at 4,096 leaves and proof-of-work at 1,000,000 attempts with difficulty limited to 20 leading-zero bits. The runtime-status response advertises the compute engine version and endpoint names. The same deterministic operations are exposed to Gemini through a whitelisted gaia_compute function declaration. The server performs the operation locally, validates the arguments, returns the function result to the model, then makes a separate schema-constrained narration request. Tool execution and structured JSON narration are separate turns. The returned computeTrace records whether the dispatcher completed each requested operation.
 
 ## Explicit proof boundary
 
