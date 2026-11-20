@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/computational/**'
+      - 'server.ts'
       - 'tests/computational-core.test.mjs'
       - 'docs/GAIA-HYPERCUBE-COMPUTATIONAL-CORE.md'
       - '.github/workflows/gaia-computational-core.yml'
