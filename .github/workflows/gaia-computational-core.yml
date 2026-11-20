@@ -6,6 +6,7 @@ on:
       - 'server.ts'
       - 'tests/computational-core.test.mjs'
       - 'tests/qc-ldpc.test.mjs'
+      - 'tests/gaia-compute-tools.test.mjs'
       - 'docs/GAIA-QC-LDPC.md'
       - 'docs/GAIA-HYPERCUBE-COMPUTATIONAL-CORE.md'
       - '.github/workflows/gaia-computational-core.yml'
@@ -19,4 +20,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test tests/computational-core.test.mjs tests/qc-ldpc.test.mjs
+      - run: node --test tests/computational-core.test.mjs tests/qc-ldpc.test.mjs tests/gaia-compute-tools.test.mjs
