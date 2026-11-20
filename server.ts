@@ -209,6 +209,7 @@ async function startServer() {
     return res.json({
       service: 'hyperterminal-node',
       chat: { handler: 'POST /api/chat', provider: apiKeyPool.hasKeys() ? 'gemini' : 'none',
+        model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash', mode: 'natural-conversation',
         ready: apiKeyPool.hasKeys() },
       mountBridge: 'separate-authenticated-localhost-service',
     });
@@ -348,7 +349,7 @@ Provide a navigation data-burst description.`;
 
         const { result: response } = await apiKeyPool.executeWithFallback(async (aiClient) => {
           return await aiClient.models.generateContent({
-            model: 'gemini-3.8-flash',
+            model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
               systemInstruction,
