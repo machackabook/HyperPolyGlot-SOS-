@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildGaiaSystemInstruction } from './src/services/gaiaPersona.mjs';
+import { buildV5Lattice, buildManhattanPath, buildMerkleTree, createMerkleProof, verifyMerkleProof, mineNonce, verifyWork, runComputationalSelfTest } from './src/computational/gaiaComputeCore.mjs';
+import { encodeQcLdpc, qcSyndrome, decodeNormalizedMinSum, qcLdpcSelfTest } from './src/computational/qcLdpc.mjs';
+import { GAIA_COMPUTE_DECLARATION, executeGaiaCompute } from './src/computational/gaiaComputeTools.mjs';
 
 dotenv.config();
 
@@ -212,6 +215,7 @@ async function startServer() {
         model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash', mode: 'natural-conversation',
         ready: apiKeyPool.hasKeys() },
       mountBridge: 'separate-authenticated-localhost-service',
+      compute: { handler: 'GET /api/compute/self-test; GET /api/compute/qc-ldpc/self-test; POST /api/compute/qc-ldpc/encode; POST /api/compute/qc-ldpc/decode; POST /api/compute/path; POST /api/compute/merkle; POST /api/compute/pow', engine: 'gaia-hypercube-v1 + qc-ldpc-z3' },
     });
   });
   // API endpoint: /api/chat
@@ -252,61 +256,66 @@ async function startServer() {
             ],
             config: {
               systemInstruction,
+              tools: [{ functionDeclarations: [GAIA_COMPUTE_DECLARATION] }],
+            },,
+          });
+        });
+
+        const requestedCalls = (response.functionCalls || []).slice(0, 3);
+        const computeTrace: Array<{ name: string; ok: boolean }> = [];
+        const functionParts = requestedCalls.map((call: any) => {
+          try {
+            if (call.name !== 'gaia_compute') throw new Error('Unknown function');
+            const result = executeGaiaCompute(call.args || {});
+            computeTrace.push({ name: call.name, ok: true });
+            return { functionResponse: { name: call.name, response: { result } } };
+          } catch (toolError: any) {
+            computeTrace.push({ name: String(call.name || 'unknown'), ok: false });
+            return { functionResponse: { name: String(call.name || 'unknown'), response: { error: toolError?.message || String(toolError) } } };
+          }
+        });
+
+        // Tool execution and schema-constrained final narration are separate turns.
+        // This preserves the JSON response contract without mixing tool calls and JSON mode.
+        const followupContents: any[] = [
+          ...safeHistory.map((c: any) => ({ role: c.role, parts: [{ text: c.text }] })),
+          { role: 'user', parts: [{ text: prompt }] },
+        ];
+        if (response.candidates?.[0]?.content) followupContents.push(response.candidates[0].content);
+        if (functionParts.length) followupContents.push({ role: 'user', parts: functionParts });
+
+        const finalTurn = await apiKeyPool.executeWithFallback(async (finalClient) => {
+          return await finalClient.models.generateContent({
+            model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+            contents: followupContents,
+            config: {
+              systemInstruction,
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                  reply: {
-                    type: Type.STRING,
-                    description: 'A complete, natural, context-aware conversational answer. Do not force a terminal format unless the user asks for commands.',
-                  },
-                  speechText: {
-                    type: Type.STRING,
-                    description: 'Concise spoken response for audio synthesis inside background visual.',
-                  },
-                  sentiment: {
-                    type: Type.STRING,
-                    description: 'Detected sentiment: analytical, energetic, alarm, tranquil, cosmic, chaos, creative.',
-                  },
-                  topology: {
-                    type: Type.STRING,
-                    description: '3D background topology: torus, tesseract, singularity, neural, galaxy, spindle, dna, galaxy_vfs, robotics_lab, protein_fold, earth_nasa.',
-                  },
-                  primaryColor: {
-                    type: Type.STRING,
-                    description: 'Primary glowing hex color code.',
-                  },
-                  secondaryColor: {
-                    type: Type.STRING,
-                    description: 'Secondary accent hex color code.',
-                  },
-                  speed: {
-                    type: Type.NUMBER,
-                    description: 'Velocity multiplier from 0.2 to 3.0.',
-                  },
-                  gravity: {
-                    type: Type.NUMBER,
-                    description: 'Gravitational tensor from 0.2 to 3.5.',
-                  },
-                  turbulence: {
-                    type: Type.NUMBER,
-                    description: 'Turbulence factor from 0.1 to 2.5.',
-                  },
-                  floatingGlyph: {
-                    type: Type.STRING,
-                    description: 'Symbolic glyph for 3D holographic projection.',
-                  },
+                  reply: { type: Type.STRING, description: 'Natural, context-aware conversational answer.' },
+                  speechText: { type: Type.STRING },
+                  sentiment: { type: Type.STRING },
+                  topology: { type: Type.STRING },
+                  primaryColor: { type: Type.STRING },
+                  secondaryColor: { type: Type.STRING },
+                  speed: { type: Type.NUMBER },
+                  gravity: { type: Type.NUMBER },
+                  turbulence: { type: Type.NUMBER },
+                  floatingGlyph: { type: Type.STRING },
                 },
                 required: ['reply', 'speechText', 'sentiment', 'topology', 'primaryColor', 'secondaryColor'],
               },
             },
           });
         });
-
-        const parsed = JSON.parse(response.text || '{}');
+        const finalResponse = finalTurn.result;
+        const parsed = JSON.parse(finalResponse.text || '{}');
         return res.json({
           source: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
           keyId: keyUsed.id,
+          computeTrace,
           ...parsed,
         });
       } catch (err: any) {
@@ -324,6 +333,67 @@ async function startServer() {
     });
   });
 
+
+  // Deterministic computational endpoints. Results are computed locally by the server.
+  app.get('/api/compute/self-test', (_req, res) => {
+    try { return res.json(runComputationalSelfTest()); }
+    catch (err: any) { return res.status(500).json({ error: 'COMPUTE_SELF_TEST_FAILED', message: err?.message || String(err) }); }
+  });
+
+  app.post('/api/compute/path', (req, res) => {
+    const { start, end } = req.body || {};
+    try {
+      const result = buildManhattanPath(start, end);
+      return res.json({ ...result, proof: 'hop-count equals the L1 lower bound' });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'INVALID_PATH_INPUT', message: err?.message || String(err) });
+    }
+  });
+
+  app.post('/api/compute/merkle', (req, res) => {
+    const { leaves, index } = req.body || {};
+    if (!Array.isArray(leaves) || leaves.length > 4096 || !Number.isInteger(index)) {
+      return res.status(400).json({ error: 'INVALID_MERKLE_INPUT', message: 'Supply a power-of-two leaf array (maximum 4,096) and an integer index.' });
+    }
+    try {
+      const tree = buildMerkleTree(leaves);
+      const proof = createMerkleProof(tree, index);
+      return res.json({ leafCount: tree.leafCount, nodeCount: tree.nodeCount, depth: tree.depth, root: tree.root, proof, proofValid: verifyMerkleProof(leaves[index], proof) });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'MERKLE_COMPUTATION_FAILED', message: err?.message || String(err) });
+    }
+  });
+
+  app.get('/api/compute/qc-ldpc/self-test', (_req, res) => {
+    try { return res.json(qcLdpcSelfTest()); }
+    catch (err: any) { return res.status(500).json({ error: 'QC_LDPC_SELF_TEST_FAILED', message: err?.message || String(err) }); }
+  });
+
+  app.post('/api/compute/qc-ldpc/encode', (req, res) => {
+    const { message } = req.body || {};
+    try {
+      const codeword = encodeQcLdpc(message);
+      return res.json({ codeword: Array.from(codeword), syndrome: qcSyndrome(codeword), valid: true });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'QC_LDPC_ENCODE_FAILED', message: err?.message || String(err) });
+    }
+  });
+
+  app.post('/api/compute/qc-ldpc/decode', (req, res) => {
+    const { llr } = req.body || {};
+    try { return res.json(decodeNormalizedMinSum(llr)); }
+    catch (err: any) { return res.status(400).json({ error: 'QC_LDPC_DECODE_FAILED', message: err?.message || String(err) }); }
+  });
+
+  app.post('/api/compute/pow', (req, res) => {
+    const { header, difficultyBits = 8, startNonce = 0, maxAttempts = 100000 } = req.body || {};
+    if (typeof header !== 'string' || header.length > 4096 || !Number.isInteger(difficultyBits) || difficultyBits < 0 || difficultyBits > 20 ||
+        !Number.isSafeInteger(startNonce) || startNonce < 0 || !Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 1000000) {
+      return res.status(400).json({ error: 'INVALID_POW_INPUT', message: 'Invalid header, difficulty, nonce, or bounded attempt count.' });
+    }
+    const result = mineNonce(header, { difficultyBits, startNonce, maxAttempts });
+    return res.json({ ...result, independentlyVerified: result.found && verifyWork(header, result) });
+  });
 
   // API endpoint: /api/navigator
   // Provides contextual AI voice descriptions for VFS nodes as the user traverses the data orbital mesh

@@ -1,0 +1,23 @@
+name: GAIA computational core
+on:
+  pull_request:
+    paths:
+      - 'src/computational/**'
+      - 'server.ts'
+      - 'tests/computational-core.test.mjs'
+      - 'tests/qc-ldpc.test.mjs'
+      - 'tests/gaia-compute-tools.test.mjs'
+      - 'docs/GAIA-QC-LDPC.md'
+      - 'docs/GAIA-HYPERCUBE-COMPUTATIONAL-CORE.md'
+      - '.github/workflows/gaia-computational-core.yml'
+  push:
+    branches: [main]
+jobs:
+  computational-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test tests/computational-core.test.mjs tests/qc-ldpc.test.mjs tests/gaia-compute-tools.test.mjs

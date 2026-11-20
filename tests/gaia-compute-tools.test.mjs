@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {GAIA_COMPUTE_DECLARATION,executeGaiaCompute} from '../src/computational/gaiaComputeTools.mjs';
+test('model tool declaration is restricted to the named compute operations',()=>{assert.equal(GAIA_COMPUTE_DECLARATION.name,'gaia_compute');assert.ok(GAIA_COMPUTE_DECLARATION.parametersJsonSchema.properties.operation.enum.includes('qc_ldpc_decode'));});
+test('dispatcher executes lattice summary and Manhattan path',()=>{const l=executeGaiaCompute({operation:'lattice_summary'});assert.equal(l.nodeCount,625);assert.equal(l.edgeCount,2000);const p=executeGaiaCompute({operation:'manhattan_path',start:[0,0,0,0],end:[1,2,3,4]});assert.equal(p.hops,10);assert.equal(p.optimal,true);});
+test('dispatcher verifies Merkle proof and bounded proof of work',()=>{const m=executeGaiaCompute({operation:'merkle_proof',leaves:['a','b'],index:1});assert.equal(m.verified,true);const w=executeGaiaCompute({operation:'proof_of_work',header:'tool-test',difficultyBits:4,maxAttempts:10000});assert.equal(w.independentlyVerified,true);});
+test('dispatcher executes QC-LDPC self-test and encoder',()=>{assert.equal(executeGaiaCompute({operation:'qc_ldpc_self_test'}).passed,true);const e=executeGaiaCompute({operation:'qc_ldpc_encode',message:[1,0,1,1,0,1]});assert.equal(e.valid,true);assert.deepEqual(e.syndrome,[0,0,0,0,0,0]);});
+test('dispatcher rejects unknown operations and invalid bounds',()=>{assert.throws(()=>executeGaiaCompute({operation:'shell'}));assert.throws(()=>executeGaiaCompute({operation:'proof_of_work',header:'x',difficultyBits:99}));});
